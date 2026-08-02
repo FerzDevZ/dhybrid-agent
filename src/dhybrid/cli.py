@@ -38,9 +38,17 @@ def cmd_run(args) -> int:
     print(result.final_text)
     tp = result.tests_passed
     tmark = "✓" if tp else ("✗" if tp is False else "—")
-    print(style(f"\n[tokens: {ctx.budget.used:,} | biaya: ${ctx.last_cost:.4f} | "
-                f"kualitas {result.quality_score}/100 | {result.files_created} file | test {tmark} | "
-                f"sesi: {ctx.sid}]", "90"))
+    escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
+    esc_msg = " (escalation: model → kuat)" if result.escalated_quality else ""
+    print(style(
+        f"\n" + "─" * 44 + "\n"
+        f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
+        f"· kualitas {result.quality_score}/100{escl_tag} "
+        f"· {result.files_created} file{esc_msg} "
+        f"· test {tmark} · sesi: {ctx.sid}\n"
+        + "─" * 44,
+        "90"
+    ))
     return 0
 
 
