@@ -15,6 +15,21 @@ Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first
 
 ## Install
 
+### One-liner (disarankan)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/FerzDevZ/dhybrid-agent/main/install.sh | bash
+```
+
+Installer: clone repo ke `~/.dhybrid-agent`, buat venv, pasang dependensi,
+buat symlink `~/.local/bin/dhybrid`, dan siapkan `.env` dari `.env.example`.
+Lalu isi API key dan jalankan `dhybrid repl` (buka terminal baru).
+
+Variabel opsional: `DHYBRID_INSTALL_DIR`, `DHYBRID_BIN_DIR`, `DHYBRID_BRANCH`,
+`DHYBRID_REPO_URL`, `DHYBRID_SKIP_ENV=1` (lewati pembuatan .env).
+
+### Manual
+
 ```bash
 cd dhybrid-agent
 python3 -m venv .venv && source .venv/bin/activate
