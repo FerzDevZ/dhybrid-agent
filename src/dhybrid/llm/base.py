@@ -52,6 +52,7 @@ class ChatResponse:
     usage: Usage
     model: str
     cache_hit: bool = False
+    fallback_tool_call: bool = False  # True = tool call dari blok ```tool (mode teks)
 
 
 @dataclass

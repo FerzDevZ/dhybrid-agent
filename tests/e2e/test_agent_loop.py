@@ -89,6 +89,46 @@ def test_loop_escalates_to_big_on_errors():
     assert res.final_text == "jawaban besar"
 
 
+class TextToolClient(LLMClient):
+    """Menjawab dengan blok ```tool (fallback / mode teks), lalu jawaban final."""
+
+    def __init__(self):
+        self.calls = 0
+        self.last_messages = None
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        self.last_messages = messages
+        if self.calls == 1:
+            yield StreamEvent(
+                kind="delta",
+                text='Saya cari dulu.\n```tool\n{"name": "grep", "arguments": {"q": "x"}}\n```',
+            )
+        else:
+            yield StreamEvent(kind="delta", text="ketemu: line 1")
+        yield StreamEvent(kind="done", usage=Usage(prompt_tokens=10, completion_tokens=5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "text-model"
+
+
+def test_loop_text_mode_tool_fallback():
+    """Mode teks: hasil tool dikirim sebagai pesan USER, tanpa tool_calls native —
+    kompatibel dengan model yang menolak format native (mis. zen 400)."""
+    client = TextToolClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("cari x", "sys")
+    assert res.final_text == "ketemu: line 1"
+    assert res.steps == 2
+    roles = [m.role for m in client.last_messages]
+    assert "tool" not in roles                      # tidak ada role:tool
+    assert not any(m.tool_calls for m in client.last_messages)  # tidak ada tool_calls native
+    assert any("[Hasil tool 'grep']" in m.content for m in client.last_messages if m.role == "user")
+
+
 def test_loop_tool_errors_dont_loop_forever():
     loop = AgentLoop(
         ScriptedClient(["errtool", "errtool", "errtool", "text:akhir"]),

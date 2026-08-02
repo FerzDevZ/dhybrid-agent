@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from dhybrid.agent.hooks import Hooks
-from dhybrid.agent.parsing import parse_tool_call
+from dhybrid.agent.parsing import parse_tool_call, strip_tool_block
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.compress import compact_conversation
 from dhybrid.efficiency.context import ContextManager
@@ -87,15 +87,18 @@ class AgentLoop:
                 tool_calls.append(ev.tool_call)
             elif ev.kind == "done" and ev.usage:
                 usage = ev.usage
+        fallback = False
         if not tool_calls:
             tc = parse_tool_call(text)
             if tc:
                 tool_calls = [tc]
-                text = ""
+                text = strip_tool_block(text)  # mode teks: simpan teks, buang blok tool
+                fallback = True
         return ChatResponse(
             message=ChatMessage(role="assistant", content=text, tool_calls=tool_calls or None),
             usage=usage or Usage(),
             model=client.model_name(),
+            fallback_tool_call=fallback,
         )
 
     def run(self, user_prompt: str, system_prompt: str) -> LoopResult:
@@ -135,19 +138,40 @@ class AgentLoop:
                 self.hooks.finish(result)
                 return result
 
-            # 4) eksekusi tool (protokol: assistant msg dgn tool_calls, lalu hasil)
-            self.ctx.push(
-                ChatMessage(role="assistant", content="", tool_calls=resp.message.tool_calls)
-            )
-            for tc in resp.message.tool_calls:
-                output = self.tools.execute(tc["name"], tc.get("arguments", {}))
-                if output.startswith("ERROR"):
-                    errors += 1
-                output = output[: self.cfg.max_tool_output_chars]
-                self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
+            # 4) eksekusi tool
+            if resp.fallback_tool_call:
+                # MODE TEKS: hasil tool dikirim sebagai pesan user biasa —
+                # kompatibel dengan model yang tidak support native tool-calling
+                # (mis. deepseek-v4-flash-free via zen → format native ditolak 400).
                 self.ctx.push(
-                    ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
+                    ChatMessage(role="assistant", content=resp.message.content)
                 )
+                for tc in resp.message.tool_calls:
+                    output = self.tools.execute(tc["name"], tc.get("arguments", {}))
+                    if output.startswith("ERROR"):
+                        errors += 1
+                    output = output[: self.cfg.max_tool_output_chars]
+                    self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
+                    self.ctx.push(
+                        ChatMessage(
+                            role="user",
+                            content=f"[Hasil tool '{tc['name']}']\n{output}",
+                        )
+                    )
+            else:
+                # MODE NATIVE: protokol tool_calls + role:tool (OpenAI/Anthropic)
+                self.ctx.push(
+                    ChatMessage(role="assistant", content="", tool_calls=resp.message.tool_calls)
+                )
+                for tc in resp.message.tool_calls:
+                    output = self.tools.execute(tc["name"], tc.get("arguments", {}))
+                    if output.startswith("ERROR"):
+                        errors += 1
+                    output = output[: self.cfg.max_tool_output_chars]
+                    self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
+                    self.ctx.push(
+                        ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
+                    )
 
             # 5) eskalasi cheap-first: model kecil gagal → model besar
             if (
