@@ -83,8 +83,9 @@ def repl_loop(ctx) -> int:
     if not _has_api_key(ctx):
         print(
             style(
-                "PERINGATAN: API key tidak ditemukan. Isi .env (lihat .env.example) "
-                "atau set env var, lalu restart.",
+                "PERINGATAN: model aktif butuh API key yang belum terisi. "
+                "Set via /settings (menu 3), /key <provider> <nilai>, "
+                "atau pakai model gratis: /model opencode-zen-fast",
                 "33",
             )
         )
@@ -169,4 +170,8 @@ def _short_args(args: dict) -> str:
 
 
 def _has_api_key(ctx) -> bool:
-    return bool(ctx.model_cfg.api_key())
+    cfg = ctx.model_cfg
+    if cfg.api_key():
+        return True
+    # route zen dengan model *-free tidak butuh API key
+    return bool(cfg.base_url and "opencode.ai/zen" in cfg.base_url and "-free" in cfg.model)

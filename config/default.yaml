@@ -1,12 +1,16 @@
 workspace: ~/.dhybrid
 
 model:
+  # default utama = route opencode zen GRATIS (tanpa API key).
+  # Ganti via: /settings atau dhybrid --model <preset>
   provider: openai
-  model: gpt-4o-mini
-  api_key_env: OPENAI_API_KEY
+  model: deepseek-v4-flash-free
+  base_url: https://opencode.ai/zen/v1
+  api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096
   temperature: 0.2
-  # small_model: preset model murah untuk tugas mekanis (hybrid router)
+  # small_model: model murah utk tugas mekanis (router). Tetap zen gratis —
+  # begitu model utama diganti ke model berbayar, router otomatis hemat biaya.
   small_model: opencode-zen-fast
 
 budget:
