@@ -117,36 +117,36 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(
         prog="dhybrid",
-        description="dhybrid-agent — CLI coding agent hemat token (hybrid routing)",
+        description="dhybrid-agent — CLI coding agent hemat token (hybrid routing). "
+                    "Tanpa subcommand = langsung masuk sesi interaktif.",
     )
     parser.add_argument("--version", action="version", version=f"dhybrid-agent {__version__}")
     parser.add_argument("--config", default=None, help="path config.yaml (default: config/default.yaml)")
     parser.add_argument("--cwd", default=None, help="working directory")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--model", default=None, help="preset model utama (mis. anthropic-big)")
+    parser.add_argument("--yes", action="store_true", help="non-interaktif: tolak perintah berbahaya otomatis")
+    sub = parser.add_subparsers(dest="command")
 
-    repl = sub.add_parser("repl", help="sesi interaktif")
-    repl.add_argument("--model", default=None)
-    repl.add_argument("--yes", action="store_true")
-    repl.add_argument("--cwd", default=None)
+    repl = sub.add_parser("repl", help="sesi interaktif (default saat tanpa subcommand)")
     run = sub.add_parser("run", help="satu prompt sekali jalan")
     run.add_argument("prompt")
-    run.add_argument("--model", default=None, help="preset model utama")
-    run.add_argument("--yes", action="store_true", help="non-interaktif: tolak perintah berbahaya")
-    run.add_argument("--cwd", default=None)
     tok = sub.add_parser("tokens", help="dashboard token & biaya")
     tok.add_argument("session_id", nargs="?", default=None)
-    tok.add_argument("--cwd", default=None)
     res = sub.add_parser("resume", help="lanjutkan sesi lama (via ringkasan)")
     res.add_argument("session_id")
-    res.add_argument("--model", default=None)
-    res.add_argument("--yes", action="store_true")
-    res.add_argument("--cwd", default=None)
-    ss = sub.add_parser("sessions", help="daftar sesi")
-    ss.add_argument("--cwd", default=None)
-    sk = sub.add_parser("skills", help="daftar skill")
-    sk.add_argument("--cwd", default=None)
+    sub.add_parser("sessions", help="daftar sesi")
+    sub.add_parser("skills", help="daftar skill")
+
+    # opsi global boleh ditulis sesudah subcommand juga (tanpa menimpa nilai global)
+    for p in (repl, run, res):
+        p.add_argument("--model", default=argparse.SUPPRESS)
+        p.add_argument("--yes", action="store_true", default=argparse.SUPPRESS)
+        p.add_argument("--cwd", default=argparse.SUPPRESS)
 
     args = parser.parse_args(argv)
+    # default: tanpa subcommand → langsung agent menu / sesi interaktif
+    if args.command is None:
+        args.command = "repl"
     handlers = {
         "repl": cmd_repl,
         "run": cmd_run,

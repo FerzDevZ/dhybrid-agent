@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig
 from dhybrid.skills.loader import inject_skills
@@ -33,6 +34,31 @@ def run_agent(ctx, prompt: str) -> str:
     return result.final_text
 
 
+BANNER = r"""
+  ██████╗ ██╗   ██╗██╗  ██╗██████╗ ██████╗ ██╗██████╗
+  ██╔══██╗╚██╗ ██╔╝██║  ██║██╔══██╗██╔══██╗██║██╔══██╗
+  ██║  ██║ ╚████╔╝ ███████║██████╔╝██████╔╝██║██████╔╝
+  ██║  ██║  ╚██╔╝  ██╔══██║██╔═══╝ ██╔═══╝ ██║██╔═══╝
+  ██████╔╝   ██║   ██║  ██║██║     ██║     ██║██║
+  ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝     ╚═╝     ╚═╝╚═╝
+"""
+
+
+def show_welcome(ctx) -> None:
+    """Banner + menu utama (muncul setiap kali dhybrid dijalankan)."""
+    print(style(BANNER, "36"))
+    print(style(f"  dhybrid-agent v{__version__} — coding agent hemat token (hybrid routing)", "1;36"))
+    print(f"  model utama : {ctx.current_model_label()}")
+    print(f"  workspace   : {ctx.cwd}")
+    print()
+    print("  MENU — ketik perintah langsung, atau:")
+    print("  " + style("/model <preset>", "32") + "   ganti model        " + style("/tokens", "32") + "   dashboard hemat token")
+    print("  " + style("/compact", "32") + "     ringkas konteks    " + style("/skills", "32") + "   lihat skill aktif")
+    print("  " + style("/sessions", "32") + "    sesi sebelumnya    " + style("/help", "32") + "    daftar perintah")
+    print("  " + style("/quit", "32") + "      keluar")
+    print()
+
+
 def repl_loop(ctx) -> int:
     from dhybrid.tools import terminal
 
@@ -49,7 +75,7 @@ def repl_loop(ctx) -> int:
 
         terminal.confirm_fn = _confirm
 
-    print(style(f"dhybrid-agent v0.1.0 — model: {ctx.current_model_label()} — ketik /help", "1;36"))
+    show_welcome(ctx)
     if not _has_api_key(ctx):
         print(
             style(
