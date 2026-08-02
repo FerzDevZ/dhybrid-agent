@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from dhybrid.dotenv import set_env_key
 from dhybrid.ui.render import style
 
@@ -17,10 +20,32 @@ PROVIDERS = [
 ]
 
 
+PROVIDER_ENABLE_FILE = Path.home() / ".dhybrid" / "provider_enable.json"
+
+
+def _load_provider_enabled() -> dict:
+    """Muat state enable/disable provider dari file."""
+    if PROVIDER_ENABLE_FILE.exists():
+        import json
+        try:
+            return json.loads(PROVIDER_ENABLE_FILE.read_text())
+        except Exception:
+            pass
+    # default: semua enabled
+    return {name: True for name, _ in PROVIDERS}
+
+
+def _save_provider_enabled(state: dict) -> None:
+    import json
+    PROVIDER_ENABLE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PROVIDER_ENABLE_FILE.write_text(json.dumps(state, indent=2))
+
+
 def _key_status() -> list[tuple[str, str, bool]]:
     import os
 
-    return [(name, env, bool(os.environ.get(env))) for name, env in PROVIDERS]
+    enabled = _load_provider_enabled()
+    return [(name, env, bool(os.environ.get(env)) and enabled.get(name, True)) for name, env in PROVIDERS]
 
 
 def print_help() -> None:
@@ -67,10 +92,11 @@ def cmd_settings(ctx) -> None:
         print("  2. Atur API key      (pilih provider mana yang diisi)")
         print("  3. Daftar semua preset")
         print("  4. Token & biaya sesi")
-        print("  5. Kelola skill      (hidup/matikan)")
+        print("  5. Kelola provider   (hidup/matikan provider)")
+        print("  6. Kelola skill      (hidup/matikan)")
         print("  0. Kembali")
         try:
-            choice = input("  pilih (0-5): ").strip()
+            choice = input("  pilih (0-6): ").strip()
         except (EOFError, KeyboardInterrupt):
             print("  [kembali]")
             return
@@ -85,9 +111,42 @@ def cmd_settings(ctx) -> None:
         elif choice == "4":
             _print_tokens(ctx)
         elif choice == "5":
+            _provider_cmd(ctx)
+        elif choice == "6":
             _skills_cmd(ctx, "")
         else:
             print(style("  pilihan tidak valid", "33"))
+
+
+def _provider_cmd(ctx) -> None:
+    """Hidup/matikan provider (enable/disable)."""
+    import os
+    enabled = _load_provider_enabled()
+
+    while True:
+        print(style("\n=== KELOLA PROVIDER ===", "1;36"))
+        for i, (name, env) in enumerate(PROVIDERS, start=1):
+            is_on = enabled.get(name, True)
+            has_key = bool(os.environ.get(env))
+            status = "✓" if enabled.get(name, True) else "✗"
+            key_mark = "🔑" if os.environ.get(env) else "  "
+            print(f"  {i}. {name:<32} {status}  {key_mark}  ({env})")
+        print("  0. Kembali")
+        try:
+            choice = input(f"  pilih provider (0-{len(PROVIDERS)}): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("  [kembali]")
+            return
+        if choice == "0":
+            return
+        try:
+            name, env = PROVIDERS[int(choice) - 1]
+        except (ValueError, IndexError):
+            print(style("  pilihan tidak valid", "33"))
+            continue
+        enabled[name] = not enabled.get(name, True)
+        _save_provider_enabled(enabled)
+        print(style(f"  OK: {name} → {'AKTIF ✓' if enabled[name] else 'NONAKTIF ✗'}", "32"))
 
 
 def _settings_model(ctx) -> None:
