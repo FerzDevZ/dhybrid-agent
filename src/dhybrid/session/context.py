@@ -7,7 +7,6 @@ from pathlib import Path
 
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.router import HybridRouter
-from dhybrid.agent.scoreboard import Scoreboard
 from dhybrid.config import Config, ModelConfig
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.cache import PromptCache
@@ -55,18 +54,11 @@ class SessionContext:
         self.ctx = ContextManager(keep_recent=cfg.context.get("keep_recent", 8))
         self.cache = PromptCache(db_path=self.workspace / "cache.sqlite")
         self.registry = ModelRegistry(cfg)
-        self.model_cfg = cfg.model  # model utama (big)
+        self.model_cfg = cfg.model  # SATU model — dipilih user, tanpa backup
         self.small_model_name = cfg.small_model
         # memori per-proyek: hash cwd → folder terpisah (sesi tetap global)
         proj_hash = hashlib.sha256(Path(cwd).resolve().as_posix().encode()).hexdigest()[:12]
         self.memory = MemoryStore(self.workspace / "projects" / proj_hash / "memory.sqlite")
-        self.scoreboard = Scoreboard(self.workspace / "scoreboard.sqlite")
-        # chain escalation kualitas (preset yang tersedia: free atau key terisi)
-        self.chain_clients, self.chain_presets = self._build_chain()
-        # model "auto" → preset terbaik dari scoreboard (belajar dari pemakaian)
-        if self.model_cfg.model == "auto":
-            best = self.scoreboard.best_available(self.chain_presets) or "opencode-zen-nemotron"
-            self.model_cfg = self.registry.resolve(best)
         self._cost_map: dict[str, ModelConfig] = self._build_cost_map()
 
         # tools + subagent factory
@@ -118,25 +110,6 @@ class SessionContext:
         self.all_skills = list(merged.values())
         self.disabled_skills = set(get_disabled_skills())
         self.skills = [sk for sk in self.all_skills if sk.name not in self.disabled_skills]
-
-    def _build_chain(self) -> tuple[list, list[str]]:
-        """Client cadangan untuk escalation kualitas — hanya preset yang TERSEDIA
-        (model *-free tanpa key, atau preset dengan key terisi)."""
-        clients: list = []
-        presets: list[str] = []
-        for name in self.cfg.model.chain or []:
-            try:
-                mc = self.registry.resolve(name)
-            except KeyError:
-                continue
-            if not (mc.model.endswith("-free") or mc.api_key()):
-                continue  # butuh key yang tidak ada → lewati
-            try:
-                clients.append(make_client(mc))
-                presets.append(name)
-            except ValueError:
-                continue
-        return clients, presets
 
     def _build_cost_map(self) -> dict[str, ModelConfig]:
         m: dict[str, ModelConfig] = {}

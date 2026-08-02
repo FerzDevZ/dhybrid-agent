@@ -1,19 +1,15 @@
 workspace: ~/.dhybrid
 
 model:
-  # SATU model utama. "auto" = scoreboard memilih preset terbaik yang tersedia
-  # (belajar dari pemakaian nyata; tanpa skor → nemotron-3-ultra-free gratis).
-  # Ganti manual kapan saja: /settings atau dhybrid --model <preset>.
+  # SATU model — dipilih user kapan saja: /settings atau dhybrid --model <preset>.
+  # TANPA model backup/chain. Default = model free yang TERBUKTI jalan tanpa key
+  # (zen nemotron-3-ultra-free). Ganti ke model lain saat key valid.
   provider: openai
-  model: auto
+  model: nemotron-3-ultra-free
   base_url: https://opencode.ai/zen/v1
   api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096
   temperature: 0.2
-  # chain escalation kualitas: jawaban berkualitas rendah (skor < 60) otomatis
-  # dilanjutkan model berikutnya. Hanya preset yang TERSEDIA yang dipakai
-  # (model *-free tanpa key; model lain butuh key valid).
-  chain: [opencode-zen-big, openai-fast, anthropic-big, opencode-zen-nemotron, opencode-zen-fast, opencode-zen-ling, opencode-zen-laguna, opencode-zen-mimo, opencode-zen-north]
 
 budget:
   soft: 60000              # trigger compaction
@@ -65,7 +61,7 @@ presets:
     cost_per_1k_output: 1.1
   openrouter-big:
     provider: openai
-    model: anthropic/claude-sonnet-4
+    model: anthropic/claude-sonnet-5
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     cost_per_1k_input: 3.0

@@ -101,7 +101,6 @@ class AgentLoop:
         budget: TokenBudget | None = None,
         cfg: LoopConfig | None = None,
         hooks: Hooks | None = None,
-        chain: list[LLMClient] | None = None,
         cwd: str = ".",
     ):
         self.router = client_or_router if hasattr(client_or_router, "route") else None
@@ -111,7 +110,6 @@ class AgentLoop:
         self.budget = budget or TokenBudget()
         self.cfg = cfg or LoopConfig()
         self.hooks = hooks or Hooks()
-        self.chain = chain or []          # client cadangan (escalation kualitas)
         self.cwd = cwd
         self.tool_events: list[dict] = []  # jejak tool (untuk verifier & skor)
 
@@ -176,7 +174,6 @@ class AgentLoop:
         last_text = ""
         nudges = 0  # sudah disodok untuk mengerjakan (max MAX_NUDGES per run)
         critiqued = False
-        chain_idx = -1
         before_files = snapshot_files(self.cwd)
         self.tool_events = []
 
@@ -251,19 +248,6 @@ class AgentLoop:
                         critiqued = True
                         result.critiqued = True
                         self.ctx.push(ChatMessage(role="user", content=CRITIQUE_MSG))
-                        continue
-                    # 3d) ESCALATION KUALITAS: skor sangat rendah → model berikutnya
-                    if (
-                        score < self.cfg.quality_threshold
-                        and chain_idx + 1 < len(self.chain)
-                    ):
-                        chain_idx += 1
-                        client = self.chain[chain_idx]
-                        result.escalated_quality = True
-                        self.ctx.push(ChatMessage(role="user", content=(
-                            f"[sistem] Jawabanmu dinilai kurang memadai (skor {score}/100). "
-                            "Selesaikan tugasnya dengan benar: jangan menolak/bertanya/berjanji — "
-                            "kerjakan dan laporkan hasil nyata.")))
                         continue
 
                 result.final_text = last_text

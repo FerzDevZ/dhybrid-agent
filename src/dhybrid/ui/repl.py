@@ -22,13 +22,9 @@ def run_agent(ctx, prompt: str) -> LoopResult:
         budget=ctx.budget,
         cfg=LoopConfig(max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000)),
         hooks=ctx.hooks,
-        chain=ctx.chain_clients,
         cwd=ctx.cwd,
     )
     result = loop.run(prompt, ctx.system_prompt)
-
-    # scoreboard belajar kualitas model ini (auto-routing makin pintar)
-    ctx.scoreboard.record(ctx.model_cfg.model, result.quality_score)
 
     # simpan ke sesi
     ctx.store.append_message(ctx.sid, "user", prompt[:2000])
