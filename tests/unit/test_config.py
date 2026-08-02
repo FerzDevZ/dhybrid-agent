@@ -1,0 +1,46 @@
+import os
+
+import pytest
+
+from dhybrid.config import Config
+from dhybrid.dotenv import load_dotenv
+from dhybrid.llm.registry import ModelRegistry
+
+
+def test_load_defaults_and_env_override(monkeypatch):
+    monkeypatch.setenv("DHYBRID_MODEL", "test-model")
+    cfg = Config.load("config/default.yaml")
+    assert cfg.model.model == "test-model"
+    assert cfg.budget["soft"] == 60000
+    assert cfg.workspace.expanduser().name == ".dhybrid"
+
+
+def test_presets_loaded():
+    cfg = Config.load("config/default.yaml")
+    assert "anthropic-big" in cfg.presets
+    assert "openrouter-fast" in cfg.presets
+    assert "ollama" not in str(cfg.presets)  # keputusan: cloud-only
+
+
+def test_resolve_preset_and_inline():
+    reg = ModelRegistry(Config.load("config/default.yaml"))
+    assert reg.resolve("openrouter-fast").model == "deepseek/deepseek-chat"
+    assert reg.resolve("anthropic:claude-haiku").provider == "anthropic"
+    with pytest.raises(KeyError):
+        reg.resolve("nope-preset")
+
+
+def test_load_dotenv(tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text("# komentar\nFOO=bar\nBAZ=\"qux\"\n")
+    monkeypatch.delenv("FOO", raising=False)
+    monkeypatch.delenv("BAZ", raising=False)
+    load_dotenv(tmp_path / ".env")
+    assert os.environ["FOO"] == "bar"
+    assert os.environ["BAZ"] == "qux"
+
+
+def test_model_cost():
+    from dhybrid.config import ModelConfig
+
+    mc = ModelConfig(cost_per_1k_input=2.0, cost_per_1k_output=10.0)
+    assert mc.cost(1000, 500) == pytest.approx(2.0 + 5.0)
