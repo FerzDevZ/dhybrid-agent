@@ -87,3 +87,22 @@ def test_skills_loaded_from_project_and_user_dirs(tmp_path):
     ctx = SessionContext(cfg, SessionStore(tmp_path / "s.sqlite"), cwd=str(proj))
     names = {s.name for s in ctx.skills}
     assert "aaa" in names and "bbb" in names
+    # skill BAWAAN (repo skills/) selalu tersedia di folder mana pun
+    assert "tdd" in names and "debugging" in names and "lazy" in names
+
+
+def test_disabled_skill_not_injected(tmp_path, monkeypatch):
+    """Skill yang dimatikan user tidak ikut di-inject, tapi tetap terdaftar."""
+    import dhybrid.session.userconfig as uc
+    from dhybrid.config import Config
+    from dhybrid.session.context import SessionContext
+    from dhybrid.session.store import SessionStore
+
+    monkeypatch.setattr(uc, "user_config_path", lambda: tmp_path / "config.yaml")
+    uc.toggle_skill("debugging")
+    cfg = Config.load("config/default.yaml")
+    cfg.workspace = tmp_path / ".dhybrid"
+    ctx = SessionContext(cfg, SessionStore(tmp_path / "s.sqlite"), cwd=str(tmp_path))
+    assert "debugging" not in {s.name for s in ctx.skills}       # tidak di-inject
+    assert "debugging" in {s.name for s in ctx.all_skills}       # tetap terdaftar
+    assert "debugging" in ctx.disabled_skills

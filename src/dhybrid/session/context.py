@@ -63,8 +63,12 @@ class SessionContext:
         )
 
         self.router: HybridRouter | None = self._build_router()
-        # skills = skill proyek (cwd/skills) + skill user (workspace/skills, hasil auto-learn)
-        self.skills = self._load_skills(cwd)
+        # skills = bawaan (install_dir/skills, SELALU tersedia) + proyek + user;
+        # yang dimatikan user (user config) tidak ikut di-inject.
+        self.all_skills: list = []
+        self.disabled_skills: set[str] = set()
+        self.skills: list = []
+        self.reload_skills(cwd)
         self.system_prompt = (
             build_system_prompt(BASE_PROMPT, workspace_hint=cwd)
             + "\n\n"
@@ -83,17 +87,23 @@ class SessionContext:
 
     # ---------- build ----------
 
-    def _load_skills(self, cwd: str) -> list:
-        """Skill proyek (cwd/skills) + skill user (~/.dhybrid/skills, auto-learn).
-        Dedupe by name — skill user menang (hasil belajar lebih baru)."""
+    def reload_skills(self, cwd: str | None = None) -> None:
+        """Muat ulang skills: bawaan + proyek + user, hormati yang dimatikan."""
+        from dhybrid.dotenv import install_dir
+        from dhybrid.session.userconfig import get_disabled_skills
         from dhybrid.skills.loader import list_skills
 
+        cwd = cwd or self.cwd
         merged: dict[str, object] = {}
+        for sk in list_skills(install_dir() / "skills"):  # skill bawaan — selalu ada
+            merged[sk.name] = sk
         for sk in list_skills(Path(cwd) / self.cfg.skills.get("dir", "skills")):
             merged[sk.name] = sk
-        for sk in list_skills(self.workspace / "skills"):
+        for sk in list_skills(self.workspace / "skills"):  # hasil auto-learn
             merged[sk.name] = sk
-        return list(merged.values())
+        self.all_skills = list(merged.values())
+        self.disabled_skills = set(get_disabled_skills())
+        self.skills = [sk for sk in self.all_skills if sk.name not in self.disabled_skills]
 
     def _build_cost_map(self) -> dict[str, ModelConfig]:
         m: dict[str, ModelConfig] = {}

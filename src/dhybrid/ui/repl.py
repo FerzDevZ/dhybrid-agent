@@ -76,7 +76,7 @@ def show_welcome(ctx) -> None:
     print("  🤖 /model <nama>        ganti model (preset / manual, mis. gpt-5.6-luna)   /key <prov> <nilai>  set key")
     print("  💰 /tokens              dashboard token & biaya               /compact             ringkas konteks")
     print("  📂 /sessions            sesi sebelumnya                       /clear               reset percakapan")
-    print("  🧠 /skills              lihat skill aktif                     /help                semua perintah")
+    print("  🧠 /skills              lihat & hidup/matikan skill           /help                semua perintah")
     print("  🚪 /quit                keluar")
     print()
     print(style("  Tips: tanpa API key pun bisa dipakai — route opencode zen gratis sudah jadi default.", "90"))

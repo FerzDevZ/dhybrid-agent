@@ -73,8 +73,8 @@ def test_skills_injected_into_prompt(monkeypatch, tmp_path):
     cfg = Config.load("config/default.yaml")
     cfg.workspace = tmp_path
     ctx = SessionContext(cfg, SessionStore(tmp_path / "s.sqlite"), cwd=str(tmp_path))
-    assert ctx.skills and ctx.skills[0].name == "tdd"
-    # prompt dengan kata "test" harus memicu inject skill
+    assert "tdd" in {s.name for s in ctx.skills}  # skill proyek + bawaan
+    # prompt dengan kata "test"/"tdd" harus memicu inject skill tdd
     from dhybrid.skills.loader import inject_skills
 
     out = inject_skills("bantu saya pakai TDD untuk fitur ini", ctx.skills)

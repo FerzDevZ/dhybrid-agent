@@ -47,3 +47,28 @@ def save_small_model(name: str | None) -> None:
     data = load_user_config()
     data["small_model"] = name
     p.write_text(yaml.safe_dump(data, sort_keys=False))
+
+
+def get_disabled_skills() -> list[str]:
+    """Skill yang dimatikan user (tersimpan di user config)."""
+    data = load_user_config()
+    return list((data.get("skills") or {}).get("disabled", []) or [])
+
+
+def toggle_skill(name: str) -> tuple[bool, list[str]]:
+    """Hidup/matikan skill. Return (enabled_now, daftar disabled)."""
+    p = user_config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    data = load_user_config()
+    skills = data.setdefault("skills", {})
+    disabled = list(skills.get("disabled", []) or [])
+    if name in disabled:
+        disabled.remove(name)
+        enabled = True
+    else:
+        disabled.append(name)
+        enabled = False
+    skills["disabled"] = disabled
+    data["skills"] = skills
+    p.write_text(yaml.safe_dump(data, sort_keys=False))
+    return enabled, disabled

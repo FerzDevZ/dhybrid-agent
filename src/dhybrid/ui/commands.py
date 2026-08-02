@@ -67,9 +67,10 @@ def cmd_settings(ctx) -> None:
         print("  2. Atur API key      (pilih provider mana yang diisi)")
         print("  3. Daftar semua preset")
         print("  4. Token & biaya sesi")
+        print("  5. Kelola skill      (hidup/matikan)")
         print("  0. Kembali")
         try:
-            choice = input("  pilih (0-4): ").strip()
+            choice = input("  pilih (0-5): ").strip()
         except (EOFError, KeyboardInterrupt):
             print("  [kembali]")
             return
@@ -83,6 +84,8 @@ def cmd_settings(ctx) -> None:
             _list_presets(ctx)
         elif choice == "4":
             _print_tokens(ctx)
+        elif choice == "5":
+            _skills_cmd(ctx, "")
         else:
             print(style("  pilihan tidak valid", "33"))
 
@@ -222,14 +225,36 @@ def handle_command(cmd: str, ctx) -> bool:
         for s in ctx.store.sessions(limit=15):
             print(f"  {s['id']}  {s['created'][:16]}  {s['title']}")
     elif name == "/skills":
-        if ctx.skills:
-            for sk in ctx.skills:
-                print(f"  {sk.name} — {sk.description[:60]}")
-        else:
-            print("(tidak ada skill — buat skills/<nama>/SKILL.md)")
+        _skills_cmd(ctx, arg)
     else:
         print(style(f"command tidak dikenal: {name} (ketik /help)", "33"))
     return False
+
+
+def _skills_cmd(ctx, arg: str) -> None:
+    """/skills — daftar semua skill (✓ aktif / ✗ nonaktif).
+    /skills <nama> — hidup/matikan skill (tersimpan permanen)."""
+    if arg:
+        from dhybrid.session.userconfig import toggle_skill
+
+        name = arg.strip()
+        if not any(s.name == name for s in ctx.all_skills):
+            print(style(f"skill '{name}' tidak dikenal", "31"))
+            return
+        enabled, _ = toggle_skill(name)
+        ctx.reload_skills()
+        print(style(f"OK: skill '{name}' → {'AKTIF ✓' if enabled else 'NONAKTIF ✗'} (tersimpan)", "32" if enabled else "33"))
+        return
+    if not ctx.all_skills:
+        print("(tidak ada skill)")
+        return
+    print(style("SKILLS (hidup/matikan: /skills <nama>):", "1;36"))
+    for sk in ctx.all_skills:
+        on = sk.name not in ctx.disabled_skills
+        mark = "✓" if on else "✗"
+        print(f"  {mark} {sk.name:<22} {sk.description[:52]}")
+    n_on = len(ctx.skills)
+    print(style(f"  ({n_on}/{len(ctx.all_skills)} aktif)", "90"))
 
 
 def _print_tokens(ctx) -> None:

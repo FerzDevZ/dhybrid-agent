@@ -22,6 +22,17 @@ def test_save_small_model(tmp_path, monkeypatch):
     assert userconfig.load_user_config()["small_model"] is None
 
 
+def test_toggle_skill_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(userconfig, "user_config_path", lambda: tmp_path / "config.yaml")
+    assert userconfig.get_disabled_skills() == []
+    enabled, disabled = userconfig.toggle_skill("debugging")
+    assert enabled is False and "debugging" in disabled
+    assert userconfig.get_disabled_skills() == ["debugging"]
+    enabled, disabled = userconfig.toggle_skill("debugging")
+    assert enabled is True and "debugging" not in disabled
+    assert userconfig.get_disabled_skills() == []
+
+
 def test_invalid_yaml_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(userconfig, "user_config_path", lambda: tmp_path / "config.yaml")
     (tmp_path / "config.yaml").write_text("::: bukan yaml :::")
