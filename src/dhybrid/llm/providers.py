@@ -35,10 +35,10 @@ class OpenAICompatClient(LLMClient):
         self.api_key = cfg.api_key()
 
     def _headers(self) -> dict:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def _payload(self, messages: list[ChatMessage], **kw) -> dict:
         payload: dict = {
@@ -148,11 +148,13 @@ class AnthropicClient(LLMClient):
         self.api_key = cfg.api_key()
 
     def _headers(self) -> dict:
-        return {
-            "x-api-key": self.api_key,
+        headers = {
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        return headers
 
     def _to_anthropic(self, messages: list[ChatMessage]) -> dict:
         system_blocks: list[dict] = []

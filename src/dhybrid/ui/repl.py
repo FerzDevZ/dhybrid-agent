@@ -34,6 +34,21 @@ def run_agent(ctx, prompt: str) -> str:
 
 
 def repl_loop(ctx) -> int:
+    from dhybrid.tools import terminal
+
+    # gerbang keamanan: default minta konfirmasi; --yes = tolak otomatis
+    if ctx.yes_mode:
+        terminal.confirm_fn = None
+    else:
+
+        def _confirm(command: str) -> bool:
+            try:
+                return input(f"⚠ perintah berbahaya terdeteksi:\n  {command}\nJalankan? (y/N) ").strip().lower() in ("y", "yes")
+            except (EOFError, KeyboardInterrupt):
+                return False
+
+        terminal.confirm_fn = _confirm
+
     print(style(f"dhybrid-agent v0.1.0 — model: {ctx.current_model_label()} — ketik /help", "1;36"))
     if not _has_api_key(ctx):
         print(

@@ -68,6 +68,12 @@ class SessionContext:
             + self.tools.spec_text()
         )
         self.hooks = Hooks()
+        # hooks default: catat usage ke SQLite (dipanggil loop tiap step)
+        self.hooks.on_step = (
+            lambda _step, model, usage, _budget: self.record_usage(model, usage)
+            if usage is not None
+            else None
+        )
         self.yes_mode = yes_mode
         self.steps = 0
         self.last_cost = 0.0
