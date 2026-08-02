@@ -18,6 +18,26 @@ def test_score_output_cases():
     assert score_output("jawaban normal") >= 40
 
 
+def test_score_output_confused_and_promise():
+    """Deteksi model bingung (bertanya berulang) & janji tanpa eksekusi."""
+    # Bertanya bingung di build request → skor rendah
+    assert score_output("Mau pakai stack apa?", is_build=True, files_created=0) < 20
+    assert score_output("Bagaimana sebaiknya ya?", is_build=True, files_created=0) < 20
+    # Janji tanpa eksekusi file → skor rendah
+    assert score_output("Saya akan buatkan untukmu", is_build=True, files_created=0, tools_used=0) < 30
+    # File dibuat → skor tinggi
+    assert score_output("Selesai, 3 file dibuat", is_build=True, files_created=3) > 60
+    # Tests passed → bonus
+    assert score_output("ok", tests_passed=True) > 50
+
+
+def test_score_output_repeated_question_tracking():
+    """Model yang bertanya berulang → skor turun karena confused hints."""
+    text = "Maaf, mau pakai stack apa dulu?"
+    s = score_output(text, is_build=True, files_created=0, tools_used=0)
+    assert s < 30  # sangat rendah: bertanya + confusion hint
+
+
 def test_verify_snapshot_and_created(tmp_path):
     (tmp_path / "a.py").write_text("x")
     before = snapshot_files(str(tmp_path))

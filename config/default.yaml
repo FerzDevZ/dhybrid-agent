@@ -10,6 +10,7 @@ model:
   api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096
   temperature: 0.2
+  chain: ["opencode-zen-big", "openrouter-big", "anthropic-big"]  # escalation quality chain
 
 budget:
   soft: 60000              # trigger compaction

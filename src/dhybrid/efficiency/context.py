@@ -1,13 +1,65 @@
 """ContextManager — jendela konteks dengan kompaksi.
 
-Pesan TUA (di luar keep_recent) diringkas menjadi 1 pesan summary;
-pesan terakhir keep_recent dipertahankan verbatim.
+KnownFacts tracker mencegah agen bertanya hal yang sudah diketahati.
 """
 
 from __future__ import annotations
 
+import re
+
 from dhybrid.llm.base import ChatMessage
 from dhybrid.llm.tokens import estimate_messages
+
+
+# ---- Known Facts Tracker ----
+# Mencegah agen menanyakan hal yang sudah diketahati.
+_FACT_PATTERNS = [
+    (re.compile(r"which\s+(\S+)"), "checked_tool:{group}"),
+    (re.compile(r"Stack apa"), "asked_stack"),
+    (re.compile(r"mau.*pilih"), "asked_choice"),
+]
+_BINGUNG_RE = re.compile(
+    r"(mau yang mana|pilih|bagaimana sebaiknya|Stack apa|bingung|tidak yakin)",
+    re.IGNORECASE,
+)
+
+
+class KnownFacts:
+    """Track fakta yang sudah diverifikasi & pertanyaan yang sudah diajukan.
+
+    Mencegah agen bolong bertanya — setiap fakta/pertanyaan dicatat,
+    dan sistem akan tahu "sudah tahu ini" sehingga tidak perlu tanya lagi.
+    """
+
+    def __init__(self):
+        self.facts: set[str] = set()
+        self.asked_questions: list[str] = []
+
+    def add_fact(self, fact: str) -> None:
+        self.facts.add(fact)
+
+    def is_known(self, question: str) -> bool:
+        q = question.lower()
+        return any(q in f.lower() or f.lower() in q for f in self.facts)
+
+    def already_asked(self, question: str) -> bool:
+        return any(question.lower() in q.lower() for q in self.asked_questions)
+
+    def mark_asked(self, question: str) -> None:
+        self.asked_questions.append(question)
+
+    def render(self) -> str:
+        """Render facts & asked questions ke string untuk inject ke prompt."""
+        parts = []
+        if self.facts:
+            parts.append("Fakta yang sudah diketahati:")
+            for f in sorted(self.facts):
+                parts.append(f"  - {f}")
+        if self.asked_questions:
+            parts.append("Pertanyaan yang sudah diajukan:")
+            for q in self.asked_questions[-5:]:
+                parts.append(f"  - {q[:100]}")
+        return "\n".join(parts) if parts else ""
 
 
 class ContextManager:
@@ -17,6 +69,7 @@ class ContextManager:
         self.messages: list[ChatMessage] = []
         self.summary: str | None = None
         self.compactions = 0
+        self.facts: KnownFacts = KnownFacts()
 
     def push(self, msg: ChatMessage) -> None:
         self.messages.append(msg)

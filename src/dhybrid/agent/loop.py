@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls, strip_tool_block
 from dhybrid.agent.quality import score_output
 from dhybrid.agent.streaming import ToolBlockFilter
-from dhybrid.agent.verify import snapshot_files, verify_build
+from dhybrid.agent.verify import count_created_files, snapshot_files, verify_build
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.compress import compact_conversation
 from dhybrid.efficiency.context import ContextManager
@@ -68,11 +68,15 @@ def _ends_with_question(text: str) -> bool:
 
 @dataclass
 class LoopConfig:
-    max_steps: int = 20
+    max_steps: int = 25                   # naik dari 20: lebih banyak ruang think
     max_tool_output_chars: int = 8000
     escalate_after_errors: int = 2
     self_critique: bool = True          # review diri untuk task kompleks
-    quality_threshold: int = 40         # skor < ini → escalate ke model berikutnya
+    quality_threshold: int = 35         # turun dari 40: lebih sensitif escalate
+    max_nudges: int = 3                 # naik dari 2: lebih agresif nudge
+    max_escalations: int = 2            # maksimal naik model berapa kali
+    escalation_chain: list = field(default_factory=list)  # preset names untuk quality-based escalation
+    escalation_cooldown_steps: int = 3  # jeda steps antar escalation (biar model bisa "pikir" dengan client baru)
 
 
 @dataclass
@@ -102,6 +106,7 @@ class AgentLoop:
         cfg: LoopConfig | None = None,
         hooks: Hooks | None = None,
         cwd: str = ".",
+        client_factory=None,  # callable: preset_name -> LLMClient, untuk escalation chain
     ):
         self.router = client_or_router if hasattr(client_or_router, "route") else None
         self.client: LLMClient | None = None if self.router else client_or_router
@@ -112,6 +117,9 @@ class AgentLoop:
         self.hooks = hooks or Hooks()
         self.cwd = cwd
         self.tool_events: list[dict] = []  # jejak tool (untuk verifier & skor)
+        self._client_factory = client_factory
+        self._esc_idx = 0  # posisi di escalation_chain (0 = model awal)
+        self._n_escalations = 0  # berapa kali udah naik model akibat quality rendah
 
     def _pick_client(self, prompt: str, force: str | None = None) -> LLMClient:
         if self.router is not None:
@@ -132,6 +140,50 @@ class AgentLoop:
         self.ctx.apply_compaction(summary)
         self.hooks.compaction(summary)
         return True
+
+    def _extract_facts(self, name: str, args: dict, output: str) -> None:
+        """Ekstrak fakta sederhana dari tool output → ctx.facts.
+
+        Mencegah agen bertanya hal yang sudah diketahui.
+        """
+        if not self.ctx.facts:
+            return
+        out = str(output).strip()
+        # terminal: which <tool>
+        if name == "terminal" and out and "not found" not in out.lower():
+            cmd = (args or {}).get("command", "")
+            if cmd.startswith("which "):
+                tool_name = cmd[6:].split()[0] if len(cmd) > 6 else ""
+                if tool_name:
+                    self.ctx.facts.add_fact(f"{tool_name} tersedia di sistem")
+        # read_file: file ada
+        if name == "read_file" and out and not out.lower().startswith("error"):
+            path = (args or {}).get("path", "")
+            if path:
+                self.ctx.facts.add_fact(f"file ada: {path}")
+        # grep: ditemukan
+        if name == "grep" and out and "not found" not in out.lower() and "\n" in out:
+            pattern = (args or {}).get("pattern", "")
+            if pattern:
+                self.ctx.facts.add_fact(f"pattern '{pattern}' ditemukan di workspace")
+
+    def _is_repeated_question(self, text: str) -> bool:
+        """Cek apakah model bertanya hal yang sudah pernah kita tanyakan."""
+        if not _ends_with_question(text):
+            return False
+        return self.ctx.facts.already_asked(text.strip())
+
+    def _live_verify(self, step: int, before_files: set[str]) -> None:
+        """Tiap 2 steps: cek file baru di workspace → inject evidence ke prompt.
+
+        Ini memungkinkan model tahu progres secara real-time, bukan tunggu akhir.
+        """
+        if step % 2 != 0 or step <= 0:  # hanya di step genap (2, 4, 6, ...)
+            return
+        after = snapshot_files(self.cwd)
+        created = count_created_files(before_files, after)
+        if created > 0:
+            self.ctx.facts.add_fact(f"{created} file baru terbuat di step {step}")
 
     def _step_once(self, client: LLMClient, messages: list[ChatMessage]) -> ChatResponse:
         """Satu turn model; streaming delta ke UI via hooks (blok ```tool disembunyikan)."""
@@ -199,6 +251,9 @@ class AgentLoop:
                     tag=f"step{step}",
                 )
             self.hooks.step(step, resp.model, resp.usage, self.budget.used)
+            # live verify: cek file baru tiap 2 steps (setelah step 2)
+            if step > 0:
+                self._live_verify(step, before_files)
 
             # 3) early-stop: jawaban final tanpa tool-call
             if not resp.message.tool_calls:
@@ -219,15 +274,39 @@ class AgentLoop:
                 is_empty = not last_text.strip()
 
                 if not self.budget.exhausted:
+                    # 3d-FIRST) Quality-based escalation: skor rendah → langsung naik model kuat
+                    # Prioritaskan ini di atas nudge — jika kualitas jelek, jangan nyoba-nyoba nudge.
+                    if (
+                        score < self.cfg.quality_threshold
+                        and self.cfg.escalation_chain
+                        and self._client_factory is not None
+                        and self._n_escalations < self.cfg.max_escalations
+                        and self._esc_idx < len(self.cfg.escalation_chain)
+                    ):
+                        self._esc_idx += 1
+                        self._n_escalations += 1
+                        result.escalated_quality = True
+                        next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
+                        client = self._client_factory(next_preset)
+                        esc_msg = (
+                            f"[sistem escalation] Skor kualitas rendah ({score}/100). "
+                            f"Beralih ke model yang lebih kuat: {next_preset}. "
+                            f"Selesaikan penuh tanpa bertanya, tanpa berjanji — lakukan eksekusi nyata."
+                        )
+                        self.ctx.push(ChatMessage(role="user", content=esc_msg))
+                        continue
+                    # catat pertanyaan yang sudah diajukan (mencegah loop bertanya)
+                    if _ends_with_question(last_text):
+                        self.ctx.facts.mark_asked(last_text.strip())
                     # 3a) model diam → minta jawaban
-                    if is_empty and nudges < MAX_NUDGES:
+                    if is_empty and nudges < self.cfg.max_nudges:
                         nudges += 1
                         self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
                         continue
                     # 3b) nudge build: bertanya/berjanji tanpa eksekusi file
                     if (
                         not result.stopped_early
-                        and nudges < MAX_NUDGES
+                        and nudges < self.cfg.max_nudges
                         and is_build
                         and not self._used_mutating_tool()
                         and not _looks_complete(last_text)
@@ -269,6 +348,7 @@ class AgentLoop:
                     output = output[: self.cfg.max_tool_output_chars]
                     self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
                     self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
+                    self._extract_facts(tc["name"], tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(
                             role="user",
@@ -287,6 +367,7 @@ class AgentLoop:
                     output = output[: self.cfg.max_tool_output_chars]
                     self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
                     self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
+                    self._extract_facts(tc["name"], tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
                     )

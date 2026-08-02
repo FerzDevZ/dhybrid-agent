@@ -15,14 +15,25 @@ from dhybrid.ui.status import (
 
 def run_agent(ctx, prompt: str) -> LoopResult:
     """Jalankan satu task agent; kembalikan hasil (termasuk skor kualitas)."""
+    chain = ctx.model_cfg.chain or []
+    loop_cfg = LoopConfig(
+        max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000),
+        escalation_chain=chain,
+    )
+
+    def _client_factory(preset_name: str):
+        from dhybrid.llm.providers import make_client
+        return make_client(ctx.registry.resolve(preset_name))
+
     loop = AgentLoop(
         ctx.router if ctx.router else ctx._fresh_client(),
         ctx.tools,
         ctx=ctx.ctx,
         budget=ctx.budget,
-        cfg=LoopConfig(max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000)),
+        cfg=loop_cfg,
         hooks=ctx.hooks,
         cwd=ctx.cwd,
+        client_factory=_client_factory if chain else None,
     )
     result = loop.run(prompt, ctx.system_prompt)
 

@@ -184,7 +184,7 @@ def test_loop_nudge_only_once():
     s = Stubborn()
     loop = AgentLoop(s, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
     res = loop.run("buatkan aplikasi", "sys")
-    assert s.calls == 3  # 1 asli + 2 nudge (MAX_NUDGES), lalu berhenti
+    assert s.calls == 4  # 1 asli + 3 nudge (max_nudges=3), lalu berhenti
     assert res.final_text == "Stack apa dulu?"
 
 
@@ -263,3 +263,59 @@ def test_loop_tool_errors_dont_loop_forever():
     )
     res = loop.run("x", "sys")
     assert res.steps <= 4
+
+def test_quality_escalation_chain():
+    """Model pertama jawab kosong (score=0) → escalate ke model kedua via chain."""
+    # Model pertama: diam (jawaban kosong) → score 0 < threshold 35
+    low_model = ScriptedClient([""], name="low")
+    # Model kedua: jawab normal → score 50 >= 35, tidak escalate
+    high_model = ScriptedClient(["ok"], name="high")
+
+    factory_called = {"count": 0}
+    def factory(preset_name: str):
+        factory_called["count"] += 1
+        return high_model
+
+    loop = AgentLoop(
+        low_model,
+        _tools(),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cfg=LoopConfig(
+            quality_threshold=35,
+            escalation_chain=["preset-high"],
+            max_escalations=1,
+            max_nudges=1,
+        ),
+        client_factory=factory,
+    )
+    res = loop.run("jelaskan arsitektur sistem", "sys")
+    assert res.escalated_quality
+    assert factory_called["count"] == 1
+    assert res.final_text.strip() == "ok"
+
+
+def test_quality_no_escalation_when_passed():
+    """Jika skor tinggi, tidak perlu escalate."""
+    ok_model = ScriptedClient(["Jawaban baik dan lengkap"], name="ok")
+    factory_called = {"count": 0}
+    def factory(preset_name: str):
+        factory_called["count"] += 1
+        return ok_model
+
+    loop = AgentLoop(
+        ok_model,
+        _tools(),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cfg=LoopConfig(
+            quality_threshold=35,
+            escalation_chain=["preset-high"],
+            max_escalations=2,
+        ),
+        client_factory=factory,
+    )
+    res = loop.run("jelaskan arsitektur", "sys")
+    assert not res.escalated_quality
+    assert factory_called["count"] == 0
+    assert res.quality_score >= 35
