@@ -106,11 +106,50 @@ class SessionContext:
 
     # ---------- model switching ----------
 
+    def resolve_model_input(self, name: str) -> ModelConfig:
+        """Terima: nama preset → 'provider:model' → model manual (route/provider aktif)."""
+        if name in self.registry.presets:
+            return self.registry.resolve(name)
+        if ":" in name:
+            return self.registry.resolve(name)
+        # manual: model apa pun di route/provider aktif (mis. di route zen: gpt-5.6-luna)
+        return ModelConfig(
+            provider=self.model_cfg.provider,
+            model=name,
+            base_url=self.model_cfg.base_url,
+            api_key_env=self.model_cfg.api_key_env,
+            max_tokens=self.model_cfg.max_tokens,
+            temperature=self.model_cfg.temperature,
+        )
+
     def set_model(self, preset: str) -> str:
-        new_cfg = self.registry.resolve(preset)
+        new_cfg = self.resolve_model_input(preset)
         self.model_cfg = new_cfg
+        self._cost_map[new_cfg.model] = new_cfg
         self.router = self._build_router()
         return f"model utama -> {preset} ({new_cfg.model} via {new_cfg.provider})"
+
+    def set_small_model(self, name: str | None) -> str:
+        """Atur model kecil router. '-' / 'none' / 'off' / kosong = nonaktifkan."""
+        if name is None or name.strip().lower() in ("-", "none", "off", "false"):
+            self.small_model_name = None
+            self.router = self._build_router()
+            return "model kecil: nonaktif (semua tugas ke model utama)"
+        if name in self.registry.presets or ":" in name:
+            cfg = self.registry.resolve(name)
+        else:
+            cfg = ModelConfig(
+                provider=self.model_cfg.provider,
+                model=name,
+                base_url=self.model_cfg.base_url,
+                api_key_env=self.model_cfg.api_key_env,
+                max_tokens=self.model_cfg.max_tokens,
+                temperature=self.model_cfg.temperature,
+            )
+        self.small_model_name = name
+        self._cost_map[cfg.model] = cfg
+        self.router = self._build_router()
+        return f"model kecil -> {name} ({cfg.model} via {cfg.provider})"
 
     def current_model_label(self) -> str:
         label = f"{self.model_cfg.model} ({self.model_cfg.provider})"

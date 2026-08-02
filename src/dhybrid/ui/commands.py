@@ -29,10 +29,9 @@ def print_help() -> None:
             """
 MENU LENGKAP — pilih dengan prefix / :
 
-  🔑 /setup              wizard atur API key (panduan interaktif)
+  ⚙️  /settings           SEMUA pengaturan dalam satu menu (model manual, key, preset, dsb)
   🔑 /key <prov> <nilai> set key cepat, contoh: /key openai sk-xxxx
-  🤖 /model [preset]     lihat / ganti model utama
-  🤖 /models             daftar semua preset model
+  🤖 /model [preset]     ganti model cepat (preset / provider:model / manual)
   💰 /tokens             dashboard token & biaya sesi ini
   📂 /compact            ringkas konteks (pesan lama)
   📂 /clear              reset konteks percakapan
@@ -46,6 +45,78 @@ dhybrid tokens · dhybrid sessions
             "36",
         )
     )
+
+
+def _list_presets(ctx) -> None:
+    for preset in sorted(ctx.registry.names()):
+        mc = ctx.registry.resolve(preset)
+        print(f"    {preset:<18} {mc.model}  (via {mc.provider})")
+
+
+def cmd_settings(ctx) -> None:
+    """Satu menu untuk semua pengaturan: model (manual), key, preset, token."""
+    while True:
+        print(style("\n=== PENGATURAN ===", "1;36"))
+        print(f"  model utama : {ctx.current_model_label()}")
+        key_row = "  api key     : " + " | ".join(
+            f"{n.split()[0]} {'✓' if ok else '✗'}" for n, e, ok in _key_status()
+        )
+        print(key_row)
+        print()
+        print("  1. Ganti model utama  (preset / provider:model / model manual apa pun)")
+        print("  2. Ganti model kecil  (router hybrid; '-' untuk nonaktifkan)")
+        print("  3. Atur API key      (wizard)")
+        print("  4. Daftar semua preset")
+        print("  5. Token & biaya sesi")
+        print("  0. Kembali")
+        try:
+            choice = input("  pilih (0-5): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("  [kembali]")
+            return
+        if choice == "0":
+            return
+        if choice == "1":
+            _settings_model(ctx)
+        elif choice == "2":
+            _settings_small(ctx)
+        elif choice == "3":
+            cmd_setup(ctx)
+        elif choice == "4":
+            _list_presets(ctx)
+        elif choice == "5":
+            _print_tokens(ctx)
+        else:
+            print(style("  pilihan tidak valid", "33"))
+
+
+def _settings_model(ctx) -> None:
+    print("  Preset tersedia:")
+    _list_presets(ctx)
+    try:
+        val = input("  Nama preset ATAU model manual (mis. gpt-5.6-luna, anthropic:claude-opus-5) [kosong = batal]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("  [batal]")
+        return
+    if not val:
+        return
+    try:
+        print(style("  " + ctx.set_model(val), "32"))
+    except KeyError as e:
+        print(style(f"  ERROR: {e}", "31"))
+
+
+def _settings_small(ctx) -> None:
+    print("  Preset kecil tersedia:")
+    _list_presets(ctx)
+    try:
+        val = input("  Nama preset / model manual / '-' untuk nonaktifkan [kosong = batal]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("  [batal]")
+        return
+    if not val:
+        return
+    print(style("  " + ctx.set_small_model(val), "32"))
 
 
 def cmd_setup(ctx) -> None:
@@ -96,6 +167,8 @@ def handle_command(cmd: str, ctx) -> bool:
         return True
     if name == "/help":
         print_help()
+    elif name == "/settings":
+        cmd_settings(ctx)
     elif name == "/setup":
         cmd_setup(ctx)
     elif name == "/key":
@@ -111,9 +184,7 @@ def handle_command(cmd: str, ctx) -> bool:
             print(f"model aktif: {ctx.current_model_label()}")
             print(f"preset tersedia: {', '.join(ctx.registry.names())}")
     elif name == "/models":
-        for preset in sorted(ctx.registry.names()):
-            mc = ctx.registry.resolve(preset)
-            print(f"  {preset:<18} {mc.model}  (via {mc.provider})")
+        _list_presets(ctx)
     elif name == "/tokens":
         _print_tokens(ctx)
     elif name == "/compact":

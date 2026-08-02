@@ -27,8 +27,7 @@ def test_bare_dhybrid_launches_repl_with_menu():
     assert p.returncode == 0
     assert "dhybrid-agent" in p.stdout          # banner
     assert "MENU" in p.stdout                   # menu utama
-    assert "/setup" in p.stdout                 # menu lengkap: atur API key
-    assert "/models" in p.stdout                # menu lengkap: daftar preset
+    assert "/settings" in p.stdout              # satu pintu semua pengaturan
     assert "dhybrid>" in p.stdout               # prompt siap pakai
 
 
