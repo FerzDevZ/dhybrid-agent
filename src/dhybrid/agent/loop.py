@@ -238,8 +238,30 @@ class AgentLoop:
             # 2) panggil model
             try:
                 resp = self._step_once(client, self.ctx.render(system_prompt))
-            except Exception as e:  # noqa: BLE001 — API error jangan crash agent
+            except Exception as e:  # noqa: BLE001 — API error
+                # RETRY: coba ke model berikutnya di escalation chain
+                # (jangan langsung stop — agen tetap berjuang sampai semua model gagal)
+                if (
+                    self.cfg.escalation_chain
+                    and self._client_factory is not None
+                    and self._n_escalations < self.cfg.max_escalations
+                    and self._esc_idx < len(self.cfg.escalation_chain)
+                ):
+                    self._esc_idx += 1
+                    self._n_escalations += 1
+                    result.escalated_quality = True
+                    result.escalation_count = self._n_escalations
+                    next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
+                    client = self._client_factory(next_preset)
+                    self.ctx.push(ChatMessage(
+                        role="user",
+                        content=f"[sistem] Gagal ke model sebelumnya ({type(e).__name__}). "
+                                f"Coba model kuat berikutnya: {next_preset}. Silakan lanjutkan."
+                    ))
+                    continue
+                # semua model gagal → berhenti dengan error yang jelas
                 result.final_text = f"[error API] {type(e).__name__}: {e}"
+                result.quality_score = 0
                 self.hooks.finish(result)
                 return result
             result.steps = step + 1
