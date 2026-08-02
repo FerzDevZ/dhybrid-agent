@@ -55,7 +55,7 @@ def test_bare_dhybrid_with_model_flag(tmp_path):
 def test_version():
     p = run_cli("--version")
     assert p.returncode == 0
-    assert "0.3.1" in p.stdout
+    assert "0.4.0" in p.stdout
 
 
 def test_sessions_empty_ok():
