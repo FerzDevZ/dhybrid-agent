@@ -50,9 +50,16 @@ def test_slugify_from_prompt():
 def test_auto_skill_worthwhile():
     from dhybrid.skills.loader import auto_skill_worthwhile
 
-    assert auto_skill_worthwhile(["terminal"], "selesai") is True
-    assert auto_skill_worthwhile([], "halo") is False          # sapaan tanpa tool
-    assert auto_skill_worthwhile(["terminal"], "[error API] x") is False
+    # aksi mengubah file → layak
+    assert auto_skill_worthwhile(["terminal", "apply_patch"], {"terminal": 3, "apply_patch": 1}, "selesai") is True
+    # sapaan tanpa tool → tidak
+    assert auto_skill_worthwhile([], {}, "halo") is False
+    # error → tidak
+    assert auto_skill_worthwhile(["terminal"], {"terminal": 2}, "[error API] x") is False
+    # eksplorasi saja (ls/grep/read, tanpa ubah file, < 4 pemakaian) → TIDAK jadi skill
+    assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 1, "grep": 1}, "jawaban pertanyaan") is False
+    # eksplorasi berat (>= 4 pemakaian) → layak
+    assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 3, "grep": 2}, "hasil analisis") is True
 
 
 def test_build_skill_md_compact_and_parsable(tmp_path):

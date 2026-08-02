@@ -211,7 +211,7 @@ def _auto_learn_skill(ctx, raw: str, final: str) -> None:
     )
 
     tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
-    if not auto_skill_worthwhile(tools_used, final):
+    if not auto_skill_worthwhile(tools_used, ctx.tools.tool_count, final):
         return
     name = slugify(raw)
     desc = (raw.strip()[:70] or "task") + " — skill otomatis dari sesi nyata"
@@ -228,8 +228,15 @@ def _make_hooks(ctx) -> Hooks:
     hooks.on_delta = stream_print
     hooks.on_step = _make_step_hook(ctx)
     hooks.on_compaction = lambda summary: print(style(f"\n[kompaksi] {summary[:120]}...", "35"))
-    hooks.on_tool = lambda name, args, output: print(style(f"\n  ⚙ {name}({_short_args(args)})", "90"))
+    hooks.on_tool = _tool_indicator
     return hooks
+
+
+def _tool_indicator(name: str, args: dict, output: str) -> None:
+    """Indikator tool ringkas + status: ⚙ nama(args) ✓ / ✗ (tanpa dump output)."""
+    ok = not output.startswith("ERROR")
+    mark = "✓" if ok else "✗"
+    print(style(f"\n  ⚙ {name}({_short_args(args)}) {mark}", "90" if ok else "31"))
 
 
 def _make_step_hook(ctx):
