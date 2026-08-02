@@ -62,6 +62,22 @@ def test_auto_skill_worthwhile():
     assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 3, "grep": 2}, "hasil analisis") is True
 
 
+def test_short_args_hides_content(tmp_path):
+    """Indikator tool tidak boleh bocorkan isi write_file."""
+    from dhybrid.ui.repl import _short_args
+
+    out = _short_args({"path": "app.py", "content": "#!/usr/bin/env python3\n" + "x" * 500})
+    assert "chars>" in out and "python3" not in out and "\n" not in out
+    assert len(out) < 80
+
+
+def test_slugify_fallback_generic():
+    from dhybrid.skills.loader import slugify
+
+    assert slugify("4") == "task"        # terlalu pendek → fallback generic
+    assert slugify("123") == "123"       # numerik murni → skip di auto-learn (tanpa huruf)
+
+
 def test_build_skill_md_compact_and_parsable(tmp_path):
     from dhybrid.skills.loader import build_skill_md, list_skills
 

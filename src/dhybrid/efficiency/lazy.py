@@ -32,6 +32,8 @@ ATURAN KERJA (prioritas tertinggi):
     (mis. user minta Laravel → buat Laravel, bukan menawarkan HTML/Flask).
     Kalau tool yang dibutuhkan tidak ada (mis. composer/php), beri tahu dengan
     jelas dan tawarkan langkah instalasi — jangan menyerah ke stack lain.
+13. Kalau kamu bertanya ke user dan user menjawab (angka/huruf/teks), GUNAKAN
+    jawaban itu PERSIS — jangan memilih sendiri yang lain.
 """
 
 

@@ -214,6 +214,10 @@ def _auto_learn_skill(ctx, raw: str, final: str) -> None:
     if not auto_skill_worthwhile(tools_used, ctx.tools.tool_count, final):
         return
     name = slugify(raw)
+    if name == "task" or not any(c.isalpha() for c in name):
+        # prompt tidak punya kata kunci bermakna (mis. user hanya ketik "4" / "123")
+        # → bukan skill yang reusable; jangan buat sampah
+        return
     desc = (raw.strip()[:70] or "task") + " — skill otomatis dari sesi nyata"
     steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))
     md = build_skill_md(name, desc, raw.strip()[:150], tools_used, final, steps=steps)
@@ -251,8 +255,15 @@ def _make_step_hook(ctx):
 
 
 def _short_args(args: dict) -> str:
-    s = ", ".join(f"{k}={str(v)[:40]}" for k, v in list(args.items())[:2])
-    return s[:80]
+    """Ringkas argumen tool utk indikator — JANGAN bocorkan isi konten panjang."""
+    parts = []
+    for k, v in list(args.items())[:2]:
+        if k == "content" and isinstance(v, str):
+            parts.append(f"{k}=<{len(v)} chars>")
+        else:
+            s = str(v).replace("\n", " ")[:20]
+            parts.append(f"{k}={s}")
+    return ", ".join(parts)[:80]
 
 
 def _has_api_key(ctx) -> bool:
