@@ -198,32 +198,29 @@ def _run_one(ctx, raw: str) -> None:
     if ctx.router:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]", "90"))
 
-    # F9: auto-skill — tawarkan simpan sesi sukses sebagai skill (hanya saat interaktif)
-    _maybe_save_skill(ctx, raw, final)
+    # Auto-skill: sesi task nyata otomatis jadi skill (tanpa tanya manual).
+    # Sapaan tanpa tool (mis. "haloo?") tidak menghasilkan skill.
+    _auto_learn_skill(ctx, raw, final)
 
 
-def _maybe_save_skill(ctx, raw: str, final: str) -> None:
-    import sys
-    from pathlib import Path
+def _auto_learn_skill(ctx, raw: str, final: str) -> None:
+    from dhybrid.skills.loader import (
+        auto_skill_worthwhile,
+        build_skill_md,
+        slugify,
+    )
 
-    from dhybrid.skills.loader import build_skill_md
-
-    if not sys.stdin.isatty():
-        return
-    try:
-        ans = input(style("  Simpan sesi ini sebagai skill? (y/N) ", "36")).strip().lower()
-        if ans not in ("y", "yes"):
-            return
-        name = input("  Nama skill (mis. fix-pdf-bug): ").strip() or "custom-skill"
-        desc = input("  Deskripsi singkat: ").strip() or f"Skill dari sesi: {raw[:50]}"
-    except (EOFError, KeyboardInterrupt):
-        return
     tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
-    md = build_skill_md(name, desc, raw, tools_used, final)
-    target = Path(ctx.cwd) / "skills" / name / "SKILL.md"
+    if not auto_skill_worthwhile(tools_used, final):
+        return
+    name = slugify(raw)
+    desc = (raw.strip()[:70] or "task") + " — skill otomatis dari sesi nyata"
+    steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))
+    md = build_skill_md(name, desc, raw.strip()[:150], tools_used, final, steps=steps)
+    target = ctx.workspace / "skills" / name / "SKILL.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(md)
-    print(style(f"  OK: skill tersimpan di {target}", "32"))
+    print(style(f"  [skill otomatis] {name} → {target}", "90"))
 
 
 def _make_hooks(ctx) -> Hooks:

@@ -16,7 +16,6 @@ from dhybrid.llm.providers import make_client
 from dhybrid.llm.registry import ModelRegistry
 from dhybrid.session.memory import MemoryStore
 from dhybrid.session.store import SessionStore
-from dhybrid.skills.loader import list_skills
 from dhybrid.tools import build_tools
 from dhybrid.tools.registry import ToolRegistry
 
@@ -64,7 +63,8 @@ class SessionContext:
         )
 
         self.router: HybridRouter | None = self._build_router()
-        self.skills = list_skills(Path(cwd) / cfg.skills.get("dir", "skills"))
+        # skills = skill proyek (cwd/skills) + skill user (workspace/skills, hasil auto-learn)
+        self.skills = self._load_skills(cwd)
         self.system_prompt = (
             build_system_prompt(BASE_PROMPT, workspace_hint=cwd)
             + "\n\n"
@@ -82,6 +82,18 @@ class SessionContext:
         self.last_cost = 0.0
 
     # ---------- build ----------
+
+    def _load_skills(self, cwd: str) -> list:
+        """Skill proyek (cwd/skills) + skill user (~/.dhybrid/skills, auto-learn).
+        Dedupe by name — skill user menang (hasil belajar lebih baru)."""
+        from dhybrid.skills.loader import list_skills
+
+        merged: dict[str, object] = {}
+        for sk in list_skills(Path(cwd) / self.cfg.skills.get("dir", "skills")):
+            merged[sk.name] = sk
+        for sk in list_skills(self.workspace / "skills"):
+            merged[sk.name] = sk
+        return list(merged.values())
 
     def _build_cost_map(self) -> dict[str, ModelConfig]:
         m: dict[str, ModelConfig] = {}

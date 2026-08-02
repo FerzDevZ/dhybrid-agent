@@ -10,6 +10,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+STOPWORDS = {
+    "yang", "dan", "di", "ke", "dari", "untuk", "dengan", "pada", "ini", "itu",
+    "saya", "anda", "kamu", "tolong", "bantu", "mohon", "please", "the", "and",
+    "with", "agar", "supaya", "cara", "bagaimana", "bisa", "pakai",
+    "menggunakan", "dll", "dst", "aja", "saja",
+}
+
 
 @dataclass
 class Skill:
@@ -60,17 +67,39 @@ def _keywords(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9_]{3,}", text.lower()))
 
 
-def build_skill_md(name: str, description: str, goal: str, tools_used: list[str], result: str) -> str:
-    """Buat SKILL.md dari sesi yang sukses (auto-skill, gaya Hermes)."""
+def build_skill_md(name: str, description: str, goal: str, tools_used: list[str], result: str, steps: str | None = None) -> str:
+    """Buat SKILL.md dari sesi yang sukses (auto-skill, gaya Hermes).
+
+    Ringkas & hemat token: body dipotong ~400 karakter agar inject skill
+    tidak membebani konteks.
+    """
     tool_line = ", ".join(tools_used) if tools_used else "(tanpa tool)"
-    return (
-        f"---\nname: {name}\ndescription: {description}\n---\n\n"
-        f"# {name}\n\n"
-        f"**Tujuan:** {goal}\n\n"
-        f"**Tools yang dipakai:** {tool_line}\n\n"
-        f"**Langkah yang terbukti berhasil** (dari sesi nyata):\n\n"
-        f"{result[:400]}\n"
-    )
+    parts = [
+        f"---\nname: {name}\ndescription: {description}\n---\n\n",
+        f"# {name}\n\n",
+        f"**Tujuan:** {goal}\n\n",
+        f"**Tools yang dipakai:** {tool_line}\n\n",
+    ]
+    if steps:
+        parts.append(f"**Langkah yang terbukti berhasil** (dari sesi nyata):\n\n{steps[:300]}\n\n")
+    else:
+        parts.append(f"**Catatan dari sesi nyata:**\n\n{result[:400]}\n")
+    return "".join(parts)
+
+
+def slugify(goal: str) -> str:
+    """Nama skill otomatis dari prompt: kata kunci pertama yang bermakna."""
+    words = [w for w in re.findall(r"[a-z0-9]{2,}", goal.lower()) if w not in STOPWORDS]
+    name = "-".join(words[:3])
+    return (name or "task")[:40]
+
+
+def auto_skill_worthwhile(tools_used: list[str], final: str) -> bool:
+    """Task nyata = ada tool yang dipakai + jawaban bukan error.
+    Sapaan seperti 'haloo?' (0 tool) TIDAK menghasilkan skill."""
+    if not tools_used:
+        return False
+    return bool(final and not final.startswith("[error"))
 
 
 def inject_skills(
