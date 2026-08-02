@@ -33,10 +33,13 @@ def cmd_repl(args) -> int:
 def cmd_run(args) -> int:
     ctx = _build_context(args)
     print(f"dhybrid: {ctx.current_model_label()}")
-    final = run_agent(ctx, args.prompt)
+    result = run_agent(ctx, args.prompt)
     print()
-    print(final)
+    print(result.final_text)
+    tp = result.tests_passed
+    tmark = "✓" if tp else ("✗" if tp is False else "—")
     print(style(f"\n[tokens: {ctx.budget.used:,} | biaya: ${ctx.last_cost:.4f} | "
+                f"kualitas {result.quality_score}/100 | {result.files_created} file | test {tmark} | "
                 f"sesi: {ctx.sid}]", "90"))
     return 0
 

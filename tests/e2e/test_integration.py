@@ -45,7 +45,7 @@ def test_full_stack(monkeypatch, tmp_path):
     assert len(ctx.tools.specs()) > 0
 
     final = run_agent(ctx, "cari fungsi def main")
-    assert "ketemu: src/a.py:1 def main" in final
+    assert "ketemu: src/a.py:1 def main" in final.final_text
 
     # usage tercatat di SQLite
     rows = store.usage(ctx.sid)

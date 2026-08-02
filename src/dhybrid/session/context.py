@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.router import HybridRouter
+from dhybrid.agent.scoreboard import Scoreboard
 from dhybrid.config import Config, ModelConfig
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.cache import PromptCache
@@ -23,6 +24,12 @@ BASE_PROMPT = (
     "Kamu adalah dhybrid-agent, coding agent CLI yang powerful dan super hemat token. "
     "Bekerjalah langsung di workspace pengguna. Periksa dulu (read_file range kecil, grep) "
     "sebelum mengedit. Selalu verifikasi dengan menjalankan test terkecil.\n\n"
+    "CONTOH PANGGILAN TOOL (2 format valid — pilih salah satu):\n"
+    "1. fenced:\n"
+    "```tool\n{\"name\": \"grep\", \"arguments\": {\"pattern\": \"def main\", \"path\": \".\"}}\n```\n"
+    "2. JSON satu baris:\n"
+    "{\"name\": \"read_file\", \"arguments\": {\"path\": \"app.py\", \"offset\": 1, \"limit\": 50}}\n\n"
+    "WAJIB: nama tool persis dari daftar TOOLS; satu panggilan per baris/blok.\n\n"
     "PANGGILAN TOOL: gunakan tool-calling native bila tersedia. Bila tidak tersedia, "
     "bungkus JSON dalam blok kode:\n"
     "```tool\n{\"name\": \"nama_tool\", \"arguments\": {...}}\n```"
@@ -53,6 +60,13 @@ class SessionContext:
         # memori per-proyek: hash cwd → folder terpisah (sesi tetap global)
         proj_hash = hashlib.sha256(Path(cwd).resolve().as_posix().encode()).hexdigest()[:12]
         self.memory = MemoryStore(self.workspace / "projects" / proj_hash / "memory.sqlite")
+        self.scoreboard = Scoreboard(self.workspace / "scoreboard.sqlite")
+        # chain escalation kualitas (preset yang tersedia: free atau key terisi)
+        self.chain_clients, self.chain_presets = self._build_chain()
+        # model "auto" → preset terbaik dari scoreboard (belajar dari pemakaian)
+        if self.model_cfg.model == "auto":
+            best = self.scoreboard.best_available(self.chain_presets) or "opencode-zen-nemotron"
+            self.model_cfg = self.registry.resolve(best)
         self._cost_map: dict[str, ModelConfig] = self._build_cost_map()
 
         # tools + subagent factory
@@ -104,6 +118,25 @@ class SessionContext:
         self.all_skills = list(merged.values())
         self.disabled_skills = set(get_disabled_skills())
         self.skills = [sk for sk in self.all_skills if sk.name not in self.disabled_skills]
+
+    def _build_chain(self) -> tuple[list, list[str]]:
+        """Client cadangan untuk escalation kualitas — hanya preset yang TERSEDIA
+        (model *-free tanpa key, atau preset dengan key terisi)."""
+        clients: list = []
+        presets: list[str] = []
+        for name in self.cfg.model.chain or []:
+            try:
+                mc = self.registry.resolve(name)
+            except KeyError:
+                continue
+            if not (mc.model.endswith("-free") or mc.api_key()):
+                continue  # butuh key yang tidak ada → lewati
+            try:
+                clients.append(make_client(mc))
+                presets.append(name)
+            except ValueError:
+                continue
+        return clients, presets
 
     def _build_cost_map(self) -> dict[str, ModelConfig]:
         m: dict[str, ModelConfig] = {}

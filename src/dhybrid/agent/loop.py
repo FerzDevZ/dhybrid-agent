@@ -15,7 +15,9 @@ from dataclasses import dataclass
 
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls, strip_tool_block
+from dhybrid.agent.quality import score_output
 from dhybrid.agent.streaming import ToolBlockFilter
+from dhybrid.agent.verify import snapshot_files, verify_build
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.compress import compact_conversation
 from dhybrid.efficiency.context import ContextManager
@@ -39,6 +41,11 @@ EXEC_MSG = (
     "[instruksi sistem] Kamu belum membuat/mengubah file apa pun (tidak ada write_file/apply_patch). "
     "User meminta DIBUATKAN. EKSEKUSI SEKARANG: buat file dengan write_file/apply_patch, "
     "verifikasi dengan perintah terkecil, lalu laporkan hasilnya."
+)
+CRITIQUE_MSG = (
+    "[instruksi sistem] Review hasilmu sendiri sebelum selesai: apakah sudah lengkap, benar, "
+    "dan sesuai permintaan user? Perbaiki kekurangan yang kamu temukan, lalu berikan jawaban "
+    "akhir yang lebih baik."
 )
 
 
@@ -64,6 +71,8 @@ class LoopConfig:
     max_steps: int = 20
     max_tool_output_chars: int = 8000
     escalate_after_errors: int = 2
+    self_critique: bool = True          # review diri untuk task kompleks
+    quality_threshold: int = 40         # skor < ini → escalate ke model berikutnya
 
 
 @dataclass
@@ -74,6 +83,11 @@ class LoopResult:
     stopped_early: bool = False
     escalated: bool = False
     budget_exhausted: bool = False
+    quality_score: int = 100            # skor kualitas output (0-100)
+    files_created: int = 0              # bukti nyata: file baru di workspace
+    tests_passed: bool | None = None    # bukti nyata: test
+    escalated_quality: bool = False     # pernah naik model karena skor rendah
+    critiqued: bool = False             # pernah self-critique
 
 
 class AgentLoop:
@@ -87,6 +101,8 @@ class AgentLoop:
         budget: TokenBudget | None = None,
         cfg: LoopConfig | None = None,
         hooks: Hooks | None = None,
+        chain: list[LLMClient] | None = None,
+        cwd: str = ".",
     ):
         self.router = client_or_router if hasattr(client_or_router, "route") else None
         self.client: LLMClient | None = None if self.router else client_or_router
@@ -95,6 +111,9 @@ class AgentLoop:
         self.budget = budget or TokenBudget()
         self.cfg = cfg or LoopConfig()
         self.hooks = hooks or Hooks()
+        self.chain = chain or []          # client cadangan (escalation kualitas)
+        self.cwd = cwd
+        self.tool_events: list[dict] = []  # jejak tool (untuk verifier & skor)
 
     def _pick_client(self, prompt: str, force: str | None = None) -> LLMClient:
         if self.router is not None:
@@ -156,6 +175,10 @@ class AgentLoop:
         errors = 0
         last_text = ""
         nudges = 0  # sudah disodok untuk mengerjakan (max MAX_NUDGES per run)
+        critiqued = False
+        chain_idx = -1
+        before_files = snapshot_files(self.cwd)
+        self.tool_events = []
 
         for step in range(self.cfg.max_steps):
             # 1) kompaksi saat budget lunak tercapai
@@ -182,28 +205,68 @@ class AgentLoop:
 
             # 3) early-stop: jawaban final tanpa tool-call
             if not resp.message.tool_calls:
-                is_empty = not last_text.strip()
-                # NUDGE (max MAX_NUDGES): (a) model diam → minta jawaban;
-                # (b) minta dibuatkan tapi bertanya/berjanji tanpa eksekusi file
-                # → sodok agar LANGSUNG kerjakan.
-                needs_exec = (
-                    _is_build_request(user_prompt)
-                    and not self._used_mutating_tool()
-                    and not result.stopped_early
-                    and not _looks_complete(last_text)
+                # ukur kualitas + bukti nyata (file/test) untuk keputusan
+                v = verify_build(self.cwd, before_files, snapshot_files(self.cwd), self.tool_events)
+                is_build = _is_build_request(user_prompt)
+                score = score_output(
+                    last_text,
+                    is_build=is_build,
+                    tools_used=len(self.tool_events),
+                    files_created=v["files_created"],
+                    tests_passed=v["tests_passed"],
                 )
-                if nudges < MAX_NUDGES and not self.budget.exhausted and (is_empty or needs_exec):
-                    nudges += 1
-                    if is_empty:
-                        msg = SILENT_MSG
-                    elif _ends_with_question(last_text):
-                        msg = NUDGE_MSG
-                    else:
-                        msg = EXEC_MSG
-                    self.ctx.push(ChatMessage(role="user", content=msg))
-                    continue
-                result.final_text = last_text
+                result.quality_score = score
+                result.files_created = v["files_created"]
+                result.tests_passed = v["tests_passed"]
                 result.stopped_early = needs_change_check(last_text)
+                is_empty = not last_text.strip()
+
+                if not self.budget.exhausted:
+                    # 3a) model diam → minta jawaban
+                    if is_empty and nudges < MAX_NUDGES:
+                        nudges += 1
+                        self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
+                        continue
+                    # 3b) nudge build: bertanya/berjanji tanpa eksekusi file
+                    if (
+                        not result.stopped_early
+                        and nudges < MAX_NUDGES
+                        and is_build
+                        and not self._used_mutating_tool()
+                        and not _looks_complete(last_text)
+                        and not is_empty
+                    ):
+                        nudges += 1
+                        msg = NUDGE_MSG if _ends_with_question(last_text) else EXEC_MSG
+                        self.ctx.push(ChatMessage(role="user", content=msg))
+                        continue
+                    # 3c) self-critique: hanya bila model sudah BERTINDAK (pakai tool)
+                    if (
+                        not critiqued
+                        and self.cfg.self_critique
+                        and score < 90
+                        and len(self.tool_events) > 0
+                        and (is_build or len(user_prompt) >= 150)
+                    ):
+                        critiqued = True
+                        result.critiqued = True
+                        self.ctx.push(ChatMessage(role="user", content=CRITIQUE_MSG))
+                        continue
+                    # 3d) ESCALATION KUALITAS: skor sangat rendah → model berikutnya
+                    if (
+                        score < self.cfg.quality_threshold
+                        and chain_idx + 1 < len(self.chain)
+                    ):
+                        chain_idx += 1
+                        client = self.chain[chain_idx]
+                        result.escalated_quality = True
+                        self.ctx.push(ChatMessage(role="user", content=(
+                            f"[sistem] Jawabanmu dinilai kurang memadai (skor {score}/100). "
+                            "Selesaikan tugasnya dengan benar: jangan menolak/bertanya/berjanji — "
+                            "kerjakan dan laporkan hasil nyata.")))
+                        continue
+
+                result.final_text = last_text
                 self.hooks.finish(result)
                 return result
 
@@ -220,6 +283,7 @@ class AgentLoop:
                     if output.startswith("ERROR"):
                         errors += 1
                     output = output[: self.cfg.max_tool_output_chars]
+                    self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
                     self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(
@@ -237,6 +301,7 @@ class AgentLoop:
                     if output.startswith("ERROR"):
                         errors += 1
                     output = output[: self.cfg.max_tool_output_chars]
+                    self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
                     self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(role="tool", content=output, tool_call_id=tc["id"])

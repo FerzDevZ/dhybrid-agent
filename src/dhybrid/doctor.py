@@ -91,4 +91,16 @@ def run_doctor(cfg: Config, offline: bool = False) -> int:
         mark = OK if ok else FAIL
         print(f"  {mark} {name}")
 
+    # scoreboard kualitas model
+    try:
+        from dhybrid.agent.scoreboard import Scoreboard
+
+        rows = Scoreboard(cfg.workspace / "scoreboard.sqlite").table()
+        if rows:
+            print("\nScoreboard model (skor kualitas rata-rata dari pemakaian):")
+            for preset, score, samples in rows:
+                print(f"  {preset:<24} {score:5.1f}  ({samples}x)")
+    except Exception:  # noqa: BLE001, S110
+        pass
+
     return 0 if all(ok for ok, _ in checks) else 1

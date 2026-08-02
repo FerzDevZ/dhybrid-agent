@@ -19,6 +19,7 @@ class ModelConfig:
     temperature: float = 0.2
     cost_per_1k_input: float = 0.0
     cost_per_1k_output: float = 0.0
+    chain: list = field(default_factory=list)  # preset cadangan escalation kualitas
 
     def api_key(self) -> str:
         return os.environ.get(self.api_key_env, "")

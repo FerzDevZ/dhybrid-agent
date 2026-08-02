@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
-from dhybrid.agent.loop import AgentLoop, LoopConfig
+from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
 from dhybrid.skills.loader import inject_skills
 from dhybrid.ui.commands import handle_command
 from dhybrid.ui.render import stream_print, style
@@ -13,8 +13,8 @@ from dhybrid.ui.status import (
 )
 
 
-def run_agent(ctx, prompt: str) -> str:
-    """Jalankan satu task agent; kembalikan jawaban final."""
+def run_agent(ctx, prompt: str) -> LoopResult:
+    """Jalankan satu task agent; kembalikan hasil (termasuk skor kualitas)."""
     loop = AgentLoop(
         ctx.router if ctx.router else ctx._fresh_client(),
         ctx.tools,
@@ -22,8 +22,13 @@ def run_agent(ctx, prompt: str) -> str:
         budget=ctx.budget,
         cfg=LoopConfig(max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000)),
         hooks=ctx.hooks,
+        chain=ctx.chain_clients,
+        cwd=ctx.cwd,
     )
     result = loop.run(prompt, ctx.system_prompt)
+
+    # scoreboard belajar kualitas model ini (auto-routing makin pintar)
+    ctx.scoreboard.record(ctx.model_cfg.model, result.quality_score)
 
     # simpan ke sesi
     ctx.store.append_message(ctx.sid, "user", prompt[:2000])
@@ -33,7 +38,7 @@ def run_agent(ctx, prompt: str) -> str:
         ctx.ctx.summary or "",
         result.final_text[:2000],
     )
-    return result.final_text
+    return result
 
 
 BANNER = r"""
@@ -183,9 +188,10 @@ def _run_one(ctx, raw: str) -> None:
 
     ctx.hooks.on_delta = _counting_delta
     try:
-        final = run_agent(ctx, prompt)
+        result = run_agent(ctx, prompt)
     finally:
         ctx.hooks.on_delta = orig_delta
+    final = result.final_text
 
     # jawaban final: tampilkan bila belum ter-stream (error / respons kosong / non-stream)
     if final and final.strip():
@@ -194,7 +200,13 @@ def _run_one(ctx, raw: str) -> None:
         elif streamed["chars"] == 0:
             print(final)
 
-    print(style(f"\n[done — {ctx.budget.used:,} token, ${ctx.last_cost:.4f}]", "90"))
+    tp = result.tests_passed
+    tmark = "✓" if tp else ("✗" if tp is False else "—")
+    print(style(
+        f"\n[done — {ctx.budget.used:,} token, ${ctx.last_cost:.4f} | "
+        f"kualitas {result.quality_score}/100 | {result.files_created} file dibuat | test {tmark}]",
+        "90",
+    ))
     if ctx.router:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]", "90"))
 

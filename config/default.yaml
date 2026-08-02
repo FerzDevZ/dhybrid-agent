@@ -1,15 +1,19 @@
 workspace: ~/.dhybrid
 
 model:
-  # SATU model utama — ganti kapan saja via /settings (bisa input manual)
-  # atau dhybrid --model <preset>. Default = nemotron-3-ultra-free via zen
-  # (GRATIS, nalar jauh lebih baik dari deepseek-flash — diuji langsung).
+  # SATU model utama. "auto" = scoreboard memilih preset terbaik yang tersedia
+  # (belajar dari pemakaian nyata; tanpa skor → nemotron-3-ultra-free gratis).
+  # Ganti manual kapan saja: /settings atau dhybrid --model <preset>.
   provider: openai
-  model: nemotron-3-ultra-free
+  model: auto
   base_url: https://opencode.ai/zen/v1
   api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096
   temperature: 0.2
+  # chain escalation kualitas: jawaban berkualitas rendah (skor < 60) otomatis
+  # dilanjutkan model berikutnya. Hanya preset yang TERSEDIA yang dipakai
+  # (model *-free tanpa key; model lain butuh key valid).
+  chain: [opencode-zen-big, openai-fast, anthropic-big, opencode-zen-nemotron, opencode-zen-fast, opencode-zen-ling, opencode-zen-laguna, opencode-zen-mimo, opencode-zen-north]
 
 budget:
   soft: 60000              # trigger compaction
