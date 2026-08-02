@@ -91,6 +91,7 @@ class LoopResult:
     files_created: int = 0              # bukti nyata: file baru di workspace
     tests_passed: bool | None = None    # bukti nyata: test
     escalated_quality: bool = False     # pernah naik model karena skor rendah
+    escalation_count: int = 0           # berapa kali naik model akibat quality rendah
     critiqued: bool = False             # pernah self-critique
 
 
@@ -286,6 +287,7 @@ class AgentLoop:
                         self._esc_idx += 1
                         self._n_escalations += 1
                         result.escalated_quality = True
+                        result.escalation_count = self._n_escalations
                         next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
                         client = self._client_factory(next_preset)
                         esc_msg = (

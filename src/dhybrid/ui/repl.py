@@ -209,13 +209,22 @@ def _run_one(ctx, raw: str) -> None:
 
     tp = result.tests_passed
     tmark = "✓" if tp else ("✗" if tp is False else "—")
+    # format [done] yang rapi & profesional
+    escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
+    esc_msg = ""
+    if result.escalated_quality:
+        esc_msg = f" (escalation: model → kuat)"
     print(style(
-        f"\n[done — {ctx.budget.used:,} token, ${ctx.last_cost:.4f} | "
-        f"kualitas {result.quality_score}/100 | {result.files_created} file dibuat | test {tmark}]",
-        "90",
+        f"\n────────────────────────────────────────────\n"
+        f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
+        f"· kualitas {result.quality_score}/100{escl_tag} "
+        f"· {result.files_created} file{esc_msg} "
+        f"· test {tmark}]\n"
+        f"────────────────────────────────────────────",
+        "90"
     ))
     if ctx.router:
-        print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]", "90"))
+        print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]{escl_tag}", "90"))
 
     # Auto-skill: sesi task nyata otomatis jadi skill (tanpa tanya manual).
     # Sapaan tanpa tool (mis. "haloo?") tidak menghasilkan skill.
