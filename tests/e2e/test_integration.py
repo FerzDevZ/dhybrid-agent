@@ -31,7 +31,9 @@ class StubClient(LLMClient):
 
 def test_full_stack(monkeypatch, tmp_path):
     import dhybrid.session.context as ctx_mod
+    import dhybrid.session.userconfig as uc
 
+    monkeypatch.setattr(uc, "user_config_path", lambda: tmp_path / "config.yaml")
     monkeypatch.setattr(ctx_mod, "make_client", lambda cfg: StubClient())
 
     cfg = Config.load("config/default.yaml")
@@ -58,7 +60,9 @@ def test_full_stack(monkeypatch, tmp_path):
 
 def test_skills_injected_into_prompt(monkeypatch, tmp_path):
     import dhybrid.session.context as ctx_mod
+    import dhybrid.session.userconfig as uc
 
+    monkeypatch.setattr(uc, "user_config_path", lambda: tmp_path / "config.yaml")
     monkeypatch.setattr(ctx_mod, "make_client", lambda cfg: StubClient())
     # buat skill tdd di workspace agar ter-inject
     sk_dir = tmp_path / "skills" / "tdd"

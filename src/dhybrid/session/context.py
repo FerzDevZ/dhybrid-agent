@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from dhybrid.agent.hooks import Hooks
@@ -50,7 +51,9 @@ class SessionContext:
         self.registry = ModelRegistry(cfg)
         self.model_cfg = cfg.model  # model utama (big)
         self.small_model_name = cfg.small_model
-        self.memory = MemoryStore(self.workspace / "memory.sqlite")
+        # memori per-proyek: hash cwd → folder terpisah (sesi tetap global)
+        proj_hash = hashlib.sha256(Path(cwd).resolve().as_posix().encode()).hexdigest()[:12]
+        self.memory = MemoryStore(self.workspace / "projects" / proj_hash / "memory.sqlite")
         self._cost_map: dict[str, ModelConfig] = self._build_cost_map()
 
         # tools + subagent factory
@@ -127,7 +130,9 @@ class SessionContext:
         self.model_cfg = new_cfg
         self._cost_map[new_cfg.model] = new_cfg
         self.router = self._build_router()
-        return f"model utama -> {preset} ({new_cfg.model} via {new_cfg.provider})"
+        from dhybrid.session.userconfig import save_model_choice
+        save_model_choice(new_cfg)  # persisten — bertahan setelah restart
+        return f"model utama -> {preset} ({new_cfg.model} via {new_cfg.provider}) — tersimpan permanen"
 
     def set_small_model(self, name: str | None) -> str:
         """Atur model kecil router. '-' / 'none' / 'off' / kosong = nonaktifkan."""
@@ -149,6 +154,8 @@ class SessionContext:
         self.small_model_name = name
         self._cost_map[cfg.model] = cfg
         self.router = self._build_router()
+        from dhybrid.session.userconfig import save_small_model
+        save_small_model(name)  # persisten
         return f"model kecil -> {name} ({cfg.model} via {cfg.provider})"
 
     def current_model_label(self) -> str:

@@ -1,5 +1,7 @@
 # 🦞 dhybrid-agent
 
+![CI](https://github.com/FerzDevZ/dhybrid-agent/actions/workflows/ci.yml/badge.svg)
+
 CLI coding agent yang **powerful untuk coding** dan **super hemat token** — berarsitektur *hybrid*: tugas mekanis dikerjakan model murah, tugas penalaran dikerjakan model besar. Local-first (own-your-data), tanpa server.
 
 Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first, workspace, skills), Pi (unified LLM API), Claude Code (UX REPL), Ponytail (lazy senior dev = hemat token terbesar).

@@ -79,6 +79,20 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   fi
 fi
 
+# ---- shell completion ----
+case "${SHELL##*/}" in
+  bash)
+    if ! grep -q "dhybrid-completion" "$HOME/.bashrc" 2>/dev/null; then
+      printf '\n# dhybrid-completion\nsource %s/scripts/completions.bash\n' "$INSTALL_DIR" >> "$HOME/.bashrc"
+      info "completion bash ditambahkan ke ~/.bashrc"
+    fi ;;
+  zsh)
+    if ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev/null; then
+      printf '\n# dhybrid-completion\nautoload -Uz compinit && compinit\nsource %s/scripts/completions.zsh\n' "$INSTALL_DIR" >> "$HOME/.zshrc"
+      info "completion zsh ditambahkan ke ~/.zshrc"
+    fi ;;
+esac
+
 # ---- selesai ----
 say "${C_BOLD}Selesai!${C_OFF}"
 info "jalankan sekarang : $BIN_DIR/dhybrid repl"

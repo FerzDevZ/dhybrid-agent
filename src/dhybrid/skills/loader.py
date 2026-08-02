@@ -60,6 +60,19 @@ def _keywords(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9_]{3,}", text.lower()))
 
 
+def build_skill_md(name: str, description: str, goal: str, tools_used: list[str], result: str) -> str:
+    """Buat SKILL.md dari sesi yang sukses (auto-skill, gaya Hermes)."""
+    tool_line = ", ".join(tools_used) if tools_used else "(tanpa tool)"
+    return (
+        f"---\nname: {name}\ndescription: {description}\n---\n\n"
+        f"# {name}\n\n"
+        f"**Tujuan:** {goal}\n\n"
+        f"**Tools yang dipakai:** {tool_line}\n\n"
+        f"**Langkah yang terbukti berhasil** (dari sesi nyata):\n\n"
+        f"{result[:400]}\n"
+    )
+
+
 def inject_skills(
     prompt: str,
     skills: list[Skill],

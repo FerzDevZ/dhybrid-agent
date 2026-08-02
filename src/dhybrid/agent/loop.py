@@ -9,10 +9,12 @@ Fitur hemat token:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from dhybrid.agent.hooks import Hooks
-from dhybrid.agent.parsing import parse_tool_call, strip_tool_block
+from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls, strip_tool_block
+from dhybrid.agent.streaming import ToolBlockFilter
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.compress import compact_conversation
 from dhybrid.efficiency.context import ContextManager
@@ -75,23 +77,29 @@ class AgentLoop:
         return True
 
     def _step_once(self, client: LLMClient, messages: list[ChatMessage]) -> ChatResponse:
-        """Satu turn model; streaming delta ke UI via hooks."""
+        """Satu turn model; streaming delta ke UI via hooks (blok ```tool disembunyikan)."""
         text = ""
         tool_calls: list[dict] = []
         usage = None
+        filt = ToolBlockFilter(self.hooks.delta) if self.hooks.on_delta else None
+        if filt:
+            filt.debug = bool(os.environ.get("DHYBRID_DEBUG"))
         for ev in client.stream(messages):
             if ev.kind == "delta":
                 text += ev.text
-                self.hooks.delta(ev.text)
+                if filt:
+                    filt.feed(ev.text)
             elif ev.kind == "tool_call" and ev.tool_call:
                 tool_calls.append(ev.tool_call)
             elif ev.kind == "done" and ev.usage:
                 usage = ev.usage
+        if filt:
+            filt.flush()
         fallback = False
         if not tool_calls:
-            tc = parse_tool_call(text)
-            if tc:
-                tool_calls = [tc]
+            calls = dedupe_tool_calls(parse_tool_calls(text))
+            if calls:
+                tool_calls = calls
                 text = strip_tool_block(text)  # mode teks: simpan teks, buang blok tool
                 fallback = True
         return ChatResponse(

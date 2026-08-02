@@ -113,6 +113,20 @@ def cmd_skills(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    from dhybrid.doctor import run_doctor
+
+    cfg = Config.load(Path(args.config) if args.config else None)
+    return run_doctor(cfg, offline=args.offline)
+
+
+def cmd_self_update(args) -> int:
+    from dhybrid.updater import self_update
+
+    print(self_update())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_standard_dotenvs()
     parser = argparse.ArgumentParser(
@@ -125,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cwd", default=None, help="working directory")
     parser.add_argument("--model", default=None, help="preset model utama (mis. anthropic-big)")
     parser.add_argument("--yes", action="store_true", help="non-interaktif: tolak perintah berbahaya otomatis")
+    parser.add_argument("--list-presets", action="store_true", help="cetak daftar preset (untuk shell completion)")
     sub = parser.add_subparsers(dest="command")
 
     repl = sub.add_parser("repl", help="sesi interaktif (default saat tanpa subcommand)")
@@ -136,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     res.add_argument("session_id")
     sub.add_parser("sessions", help="daftar sesi")
     sub.add_parser("skills", help="daftar skill")
+    doc = sub.add_parser("doctor", help="diagnosa config, key, koneksi, update")
+    doc.add_argument("--offline", action="store_true", help="tanpa cek network")
+    sub.add_parser("self-update", help="perbarui dhybrid-agent dari GitHub")
 
     # opsi global boleh ditulis sesudah subcommand juga (tanpa menimpa nilai global)
     for p in (repl, run, res):
@@ -144,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--cwd", default=argparse.SUPPRESS)
 
     args = parser.parse_args(argv)
+    if args.list_presets:
+        cfg = Config.load(Path(args.config) if args.config else None)
+        print("\n".join(sorted(cfg.presets)))
+        return 0
     # default: tanpa subcommand → langsung agent menu / sesi interaktif
     if args.command is None:
         args.command = "repl"
@@ -154,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
         "resume": cmd_resume,
         "sessions": cmd_sessions,
         "skills": cmd_skills,
+        "doctor": cmd_doctor,
+        "self-update": cmd_self_update,
     }
     return handlers[args.command](args)
 

@@ -8,7 +8,10 @@ from dhybrid.session.store import SessionStore
 
 
 @pytest.fixture
-def ctx(tmp_path):
+def ctx(tmp_path, monkeypatch):
+    import dhybrid.session.userconfig as uc
+
+    monkeypatch.setattr(uc, "user_config_path", lambda: tmp_path / "config.yaml")
     cfg = Config.load("config/default.yaml")
     cfg.workspace = tmp_path
     return SessionContext(cfg, SessionStore(tmp_path / "s.sqlite"), cwd=str(tmp_path))
@@ -59,3 +62,12 @@ def test_default_single_model_no_router(ctx):
     memakai model utama."""
     assert ctx.small_model_name is None
     assert ctx.router is None
+
+
+def test_set_model_persists(ctx, tmp_path):
+    import dhybrid.session.userconfig as uc
+
+    ctx.set_model("opencode-zen-big")
+    data = uc.load_user_config()
+    assert data["model"]["model"] == "claude-sonnet-5"
+    assert (tmp_path / "config.yaml").exists()

@@ -19,6 +19,7 @@ def build_tools(
     from dhybrid.tools import (
         files,
         git,
+        mcp,
         memory,
         patch,
         search,
@@ -26,10 +27,12 @@ def build_tools(
         terminal,
         tests,
         todo,
+        web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo):
+    for mod in (terminal, files, patch, search, git, tests, todo, web):
         mod.register(reg, max_chars=max_chars)
+    mcp.register(reg, servers=cfg.tool.get("mcp_servers", []))
     memory.register(reg, max_chars=max_chars, store=memory_store)
     subagents.register(reg, max_chars=max_chars, client_factory=client_factory)
     return reg

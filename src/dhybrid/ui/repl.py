@@ -7,8 +7,10 @@ from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig
 from dhybrid.skills.loader import inject_skills
 from dhybrid.ui.commands import handle_command
-from dhybrid.ui.render import is_tty, stream_print, style
-from dhybrid.ui.status import format_status
+from dhybrid.ui.render import stream_print, style
+from dhybrid.ui.status import (
+    format_status,  # noqa: F401  (API publik, dipakai doctor nanti)
+)
 
 
 def run_agent(ctx, prompt: str) -> str:
@@ -44,6 +46,23 @@ BANNER = r"""
 """
 
 
+def check_update_notice() -> str | None:
+    """Notifikasi update (cek max 1x/hari via cache mtime)."""
+    import time
+    from pathlib import Path
+
+    from dhybrid.updater import update_available
+    cache = Path.home() / ".dhybrid" / ".update-check"
+    if cache.exists() and time.time() - cache.stat().st_mtime < 86400:
+        return None
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.touch()
+    try:
+        return "⚠ update tersedia — jalankan: dhybrid self-update" if update_available() else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def show_welcome(ctx) -> None:
     """Banner + menu utama lengkap (muncul setiap kali dhybrid dijalankan)."""
     print(style(BANNER, "36"))
@@ -61,6 +80,9 @@ def show_welcome(ctx) -> None:
     print("  🚪 /quit                keluar")
     print()
     print(style("  Tips: tanpa API key pun bisa dipakai — route opencode zen gratis sudah jadi default.", "90"))
+    notice = check_update_notice()  # internal sudah try/except, tidak akan raise
+    if notice:
+        print(style(notice, "33"))
 
 
 def repl_loop(ctx) -> int:
@@ -91,26 +113,44 @@ def repl_loop(ctx) -> int:
         )
     ctx.hooks = _make_hooks(ctx)
 
-    while True:
-        try:
-            raw = input(style("dhybrid> ", "32")).strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nbye 👋")
-            return 0
-        if not raw:
-            continue
-        if raw.startswith("/"):
-            if handle_command(raw, ctx):
+    # REPL history (readline stdlib) — panah atas untuk prompt sebelumnya
+    history_file = ctx.workspace / "history"
+    try:
+        import readline
+
+        if history_file.exists():
+            readline.read_history_file(history_file)
+        readline.set_history_length(500)
+    except (ImportError, OSError):
+        readline = None
+
+    try:
+        while True:
+            try:
+                raw = input(style("dhybrid> ", "32")).strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\nbye 👋")
                 return 0
-            continue
-        if not ctx.sid:
-            ctx.sid = ctx.store.new_session()
-        try:
-            _run_one(ctx, raw)
-        except KeyboardInterrupt:
-            print(style("\n[dibatalkan]", "33"))
-        except Exception as e:  # noqa: BLE001
-            print(style(f"\n[error] {type(e).__name__}: {e}", "31"))
+            if not raw:
+                continue
+            if raw.startswith("/"):
+                if handle_command(raw, ctx):
+                    return 0
+                continue
+            if not ctx.sid:
+                ctx.sid = ctx.store.new_session()
+            try:
+                _run_one(ctx, raw)
+            except KeyboardInterrupt:
+                print(style("\n[dibatalkan]", "33"))
+            except Exception as e:  # noqa: BLE001
+                print(style(f"\n[error] {type(e).__name__}: {e}", "31"))
+    finally:
+        if readline is not None:
+            try:
+                readline.write_history_file(history_file)
+            except OSError:
+                pass
 
 
 def _run_one(ctx, raw: str) -> None:
@@ -158,6 +198,33 @@ def _run_one(ctx, raw: str) -> None:
     if ctx.router:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]", "90"))
 
+    # F9: auto-skill — tawarkan simpan sesi sukses sebagai skill (hanya saat interaktif)
+    _maybe_save_skill(ctx, raw, final)
+
+
+def _maybe_save_skill(ctx, raw: str, final: str) -> None:
+    import sys
+    from pathlib import Path
+
+    from dhybrid.skills.loader import build_skill_md
+
+    if not sys.stdin.isatty():
+        return
+    try:
+        ans = input(style("  Simpan sesi ini sebagai skill? (y/N) ", "36")).strip().lower()
+        if ans not in ("y", "yes"):
+            return
+        name = input("  Nama skill (mis. fix-pdf-bug): ").strip() or "custom-skill"
+        desc = input("  Deskripsi singkat: ").strip() or f"Skill dari sesi: {raw[:50]}"
+    except (EOFError, KeyboardInterrupt):
+        return
+    tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
+    md = build_skill_md(name, desc, raw, tools_used, final)
+    target = Path(ctx.cwd) / "skills" / name / "SKILL.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(md)
+    print(style(f"  OK: skill tersimpan di {target}", "32"))
+
 
 def _make_hooks(ctx) -> Hooks:
     hooks = Hooks()
@@ -169,19 +236,12 @@ def _make_hooks(ctx) -> Hooks:
 
 
 def _make_step_hook(ctx):
-    max_steps = 20
+    """Catat usage & progres — TANPA statusline \r (dulu merusak teks streaming)."""
 
     def on_step(step: int, model: str, usage, budget_used: int) -> None:
         ctx.steps = step
         if usage is not None:
             ctx.record_usage(model, usage)
-        if is_tty():
-            status = format_status(
-                ctx.budget, model, step + 1, max_steps,
-                cache_ratio=ctx.budget.cache_hit_ratio,
-                cost=ctx.last_cost,
-            )
-            stream_print(style(f"\r{status}", "90"))
 
     return on_step
 

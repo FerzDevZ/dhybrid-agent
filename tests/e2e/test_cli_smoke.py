@@ -1,16 +1,19 @@
+import os
+
 """Smoke test CLI — tanpa API key harus tetap jalan & error-nya ramah."""
 
 import subprocess
 import sys
 
 
-def run_cli(*args, timeout=60):
+def run_cli(*args, timeout=60, env=None):
     return subprocess.run(
         [sys.executable, "-m", "dhybrid", *args],
         capture_output=True,
         text=True,
         timeout=timeout,
         check=False,
+        env=env,
     )
 
 
@@ -31,8 +34,11 @@ def test_bare_dhybrid_launches_repl_with_menu():
     assert "dhybrid>" in p.stdout               # prompt siap pakai
 
 
-def test_bare_dhybrid_with_model_flag():
-    """`dhybrid --model X` (tanpa subcommand) → REPL dengan model terganti."""
+def test_bare_dhybrid_with_model_flag(tmp_path):
+    """`dhybrid --model X` (tanpa subcommand) → REPL dengan model terganti.
+    HOME di-sandbox agar pilihan model tidak menulis ke config user asli."""
+    env = dict(os.environ)
+    env["HOME"] = str(tmp_path)
     p = subprocess.run(
         [sys.executable, "-m", "dhybrid", "--model", "openrouter-big", "--cwd", "/tmp"],
         input="/quit\n",
@@ -40,6 +46,7 @@ def test_bare_dhybrid_with_model_flag():
         text=True,
         timeout=60,
         check=False,
+        env=env,
     )
     assert p.returncode == 0
     assert "claude-sonnet" in p.stdout
@@ -48,7 +55,7 @@ def test_bare_dhybrid_with_model_flag():
 def test_version():
     p = run_cli("--version")
     assert p.returncode == 0
-    assert "0.1.0" in p.stdout
+    assert "0.3.0" in p.stdout
 
 
 def test_sessions_empty_ok():
@@ -67,6 +74,7 @@ def test_run_without_key_fails_gracefully(tmp_path):
     import os
 
     env = dict(os.environ)
+    env["HOME"] = str(tmp_path)
     for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
         env.pop(k, None)
     p = subprocess.run(

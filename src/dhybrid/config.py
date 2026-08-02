@@ -76,6 +76,16 @@ class Config:
         if "presets" in data and isinstance(data["presets"], dict):
             cfg.presets = data["presets"]
 
+        # user override (~/.dhybrid/config.yaml) — menimpa model bawaan (persisten)
+        from dhybrid.session.userconfig import load_user_config
+        user = load_user_config()
+        if "model" in user and isinstance(user["model"], dict):
+            for k, v in user["model"].items():
+                if hasattr(cfg.model, k):
+                    setattr(cfg.model, k, v)
+        if "small_model" in user:
+            cfg.small_model = user["small_model"]
+
         # env override: DHYBRID_MODEL, DHYBRID_PROVIDER, DHYBRID_BASE_URL, DHYBRID_SMALL_MODEL
         if os.environ.get("DHYBRID_MODEL"):
             cfg.model.model = os.environ["DHYBRID_MODEL"]
