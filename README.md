@@ -63,7 +63,7 @@ dhybrid repl --model gemini-fast       # model kecil = Gemini Flash
 export DHYBRID_MODEL=gpt-4o            # atau via env
 ```
 
-Preset tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`.
+Preset tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `opencode-zen-fast/big/codex` (route https://opencode.ai/zen/v1 — gratis tanpa API key, sudah jadi default small model).
 
 ## Hemat Token — Cara Kerja
 

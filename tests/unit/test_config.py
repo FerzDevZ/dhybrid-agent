@@ -22,6 +22,25 @@ def test_presets_loaded():
     assert "ollama" not in str(cfg.presets)  # keputusan: cloud-only
 
 
+def test_opencode_zen_route_preset():
+    """Route opencode zen (https://opencode.ai/zen/v1) harus ter-resolve
+    sebagai OpenAI-compatible client dengan base_url yang benar."""
+    from dhybrid.llm.providers import OpenAICompatClient, make_client
+
+    cfg = Config.load("config/default.yaml")
+    reg = ModelRegistry(cfg)
+    zen = reg.resolve("opencode-zen-fast")
+    assert zen.model == "deepseek-v4-flash-free"
+    assert zen.base_url == "https://opencode.ai/zen/v1"
+    client = make_client(zen)
+    assert isinstance(client, OpenAICompatClient)
+    assert client.base_url == "https://opencode.ai/zen/v1"
+    # tanpa key → tidak ada header Authorization (endpoint gratis)
+    assert "Authorization" not in client._headers()
+    # default small model = route zen (gratis)
+    assert cfg.small_model == "opencode-zen-fast"
+
+
 def test_resolve_preset_and_inline():
     reg = ModelRegistry(Config.load("config/default.yaml"))
     assert reg.resolve("openrouter-fast").model == "deepseek/deepseek-chat"

@@ -61,18 +61,23 @@ def test_skills_lists_nothing_gracefully(tmp_path):
 
 
 def test_run_without_key_fails_gracefully(tmp_path):
+    """Tanpa key + model yang butuh auth (openai-fast) → error API yang jelas, bukan traceback.
+    (Catatan: model default kecil sekarang route zen gratis — bisa jalan tanpa key.)"""
     import os
 
     env = dict(os.environ)
     for k in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY"):
         env.pop(k, None)
     p = subprocess.run(
-        [sys.executable, "-m", "dhybrid", "run", "halo", "--cwd", str(tmp_path)],
+        [sys.executable, "-m", "dhybrid", "run", "desain ulang arsitektur modul ini dan jelaskan alasannya",
+         "--model", "openai-fast", "--cwd", str(tmp_path)],
         capture_output=True,
         text=True,
         timeout=90,
         check=False,
         env=env,
     )
-    # harus error HTTP/401 yang jelas, bukan traceback diam
-    assert "ERROR" in p.stdout + p.stderr or "401" in p.stdout + p.stderr or "error" in (p.stdout + p.stderr).lower()
+    # prompt "desain..." dirutekan ke model BESAR (openai-fast, tanpa key):
+    # tanpa network → ConnectError; dengan network → 401. Dua-duanya error API yang ramah.
+    assert "[error API]" in p.stdout or "[error API]" in p.stderr
+    assert "Traceback" not in p.stdout + p.stderr

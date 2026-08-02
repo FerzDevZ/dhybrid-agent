@@ -69,9 +69,11 @@ class OpenAICompatClient(LLMClient):
     def stream(self, messages: list[ChatMessage], **kw) -> Iterator[StreamEvent]:
         payload = self._payload(messages, **kw)
         payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}  # minta usage di chunk terakhir
         r = self._post(payload)
         r.raise_for_status()
         acc: dict[int, dict] = {}
+        usage: Usage | None = None
         for line in r.iter_lines():
             if not line or not line.startswith("data:"):
                 continue
@@ -79,6 +81,16 @@ class OpenAICompatClient(LLMClient):
             if data == "[DONE]":
                 break
             chunk = json.loads(data)
+            if chunk.get("usage"):
+                u = chunk["usage"]
+                details = u.get("prompt_tokens_details") or {}
+                usage = Usage(
+                    prompt_tokens=u.get("prompt_tokens", 0),
+                    completion_tokens=u.get("completion_tokens", 0),
+                    cached_tokens=details.get("cached_tokens", 0)
+                    if isinstance(details, dict)
+                    else 0,
+                )
             delta = chunk["choices"][0].get("delta", {})
             if delta.get("content"):
                 yield StreamEvent(kind="delta", text=delta["content"])
@@ -101,7 +113,10 @@ class OpenAICompatClient(LLMClient):
                     "arguments": _parse_arguments(slot["arguments"]),
                 },
             )
-        yield StreamEvent(kind="done")
+        if usage:
+            yield StreamEvent(kind="done", usage=usage)
+        else:
+            yield StreamEvent(kind="done")
 
     def complete(self, messages: list[ChatMessage], **kw) -> ChatResponse:
         payload = self._payload(messages, **kw)
