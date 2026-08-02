@@ -71,6 +71,21 @@ if [ "${DHYBRID_SKIP_ENV:-0}" != "1" ] && [ ! -f "$INSTALL_DIR/.env" ] && [ -f "
   info ".env dibuat — isi API key-mu: $INSTALL_DIR/.env"
 fi
 
+# ---- auto-check tools untuk suggerensi stack default ----
+say "Mengecek tools development..."
+AVAILABLE_TOOLS=""
+for cmd in php composer node npm python3 pip3; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        AVAILABLE_TOOLS="$AVAILABLE_TOOLS $cmd"
+    fi
+done
+if [ -n "$AVAILABLE_TOOLS" ]; then
+    info "Tools tersedia:$AVAILABLE_TOOLS"
+else
+    warn "Tidak ada development tools terdeteksi (php, node, python, dll.)"
+    info "Anda tetap bisa pakai dhybrid — tapi untuk coding butuh tools."
+fi
+
 # ---- PATH permanen (~/.bashrc) ----
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   if ! grep -q "dhybrid-agent PATH" "$HOME/.bashrc" 2>/dev/null; then
