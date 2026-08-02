@@ -2,9 +2,10 @@ workspace: ~/.dhybrid
 
 model:
   # SATU model utama — ganti kapan saja via /settings (bisa input manual)
-  # atau dhybrid --model <preset>. Default = route opencode zen GRATIS.
+  # atau dhybrid --model <preset>. Default = nemotron-3-ultra-free via zen
+  # (GRATIS, nalar jauh lebih baik dari deepseek-flash — diuji langsung).
   provider: openai
-  model: deepseek-v4-flash-free
+  model: nemotron-3-ultra-free
   base_url: https://opencode.ai/zen/v1
   api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096

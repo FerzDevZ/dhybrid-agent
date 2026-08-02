@@ -10,6 +10,7 @@ Fitur hemat token:
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 
 from dhybrid.agent.hooks import Hooks
@@ -21,6 +22,41 @@ from dhybrid.efficiency.context import ContextManager
 from dhybrid.efficiency.lazy import needs_change_check
 from dhybrid.llm.base import ChatMessage, ChatResponse, LLMClient, Usage
 from dhybrid.tools.registry import ToolRegistry
+
+BUILD_VERBS = ("buat", "buatkan", "bikin", "buatin", "tambahkan", "create", "make", "implement", "bangun")
+MUTATING_TOOLS = {"apply_patch", "write_file", "git_commit"}
+MAX_NUDGES = 2
+NUDGE_MSG = (
+    "[instruksi sistem dari user] Jangan bertanya — user meminta DIBUATKAN. "
+    "Pilih stack default yang toolnya tersedia di sistem (cek: which php composer node npm python3), "
+    "LANGSUNG buat file + verifikasi, lalu laporkan. Kerjakan sekarang, jangan tanya dulu."
+)
+SILENT_MSG = (
+    "[instruksi sistem] Kamu sudah memakai tool tetapi belum memberi jawaban. "
+    "Berikan jawaban akhir yang jelas SEKARANG (ringkas hasilnya)."
+)
+EXEC_MSG = (
+    "[instruksi sistem] Kamu belum membuat/mengubah file apa pun (tidak ada write_file/apply_patch). "
+    "User meminta DIBUATKAN. EKSEKUSI SEKARANG: buat file dengan write_file/apply_patch, "
+    "verifikasi dengan perintah terkecil, lalu laporkan hasilnya."
+)
+
+
+COMPLETION_SIGNALS = ("selesai", "dibuat", "berhasil", "beres", "siap dipakai", "done", "completed", "success", "berfungsi")
+
+
+def _looks_complete(text: str) -> bool:
+    low = text.lower()
+    return any(s in low for s in COMPLETION_SIGNALS)
+
+
+def _is_build_request(prompt: str) -> bool:
+    low = prompt.lower()
+    return any(v in low for v in BUILD_VERBS)
+
+
+def _ends_with_question(text: str) -> bool:
+    return bool(re.search(r"\?\s*$", text.strip()))
 
 
 @dataclass
@@ -64,6 +100,10 @@ class AgentLoop:
         if self.router is not None:
             return self.router.route(prompt, force=force)
         return self.client  # type: ignore[return-value]
+
+    def _used_mutating_tool(self) -> bool:
+        """Ada tool yang mengubah file? (untuk keputusan nudge)."""
+        return any(self.tools.tool_count.get(t, 0) > 0 for t in MUTATING_TOOLS)
 
     def _compact(self, client: LLMClient) -> bool:
         cands = self.ctx.candidates_for_compaction()
@@ -115,6 +155,7 @@ class AgentLoop:
         client = self._pick_client(user_prompt)
         errors = 0
         last_text = ""
+        nudges = 0  # sudah disodok untuk mengerjakan (max MAX_NUDGES per run)
 
         for step in range(self.cfg.max_steps):
             # 1) kompaksi saat budget lunak tercapai
@@ -141,6 +182,26 @@ class AgentLoop:
 
             # 3) early-stop: jawaban final tanpa tool-call
             if not resp.message.tool_calls:
+                is_empty = not last_text.strip()
+                # NUDGE (max MAX_NUDGES): (a) model diam → minta jawaban;
+                # (b) minta dibuatkan tapi bertanya/berjanji tanpa eksekusi file
+                # → sodok agar LANGSUNG kerjakan.
+                needs_exec = (
+                    _is_build_request(user_prompt)
+                    and not self._used_mutating_tool()
+                    and not result.stopped_early
+                    and not _looks_complete(last_text)
+                )
+                if nudges < MAX_NUDGES and not self.budget.exhausted and (is_empty or needs_exec):
+                    nudges += 1
+                    if is_empty:
+                        msg = SILENT_MSG
+                    elif _ends_with_question(last_text):
+                        msg = NUDGE_MSG
+                    else:
+                        msg = EXEC_MSG
+                    self.ctx.push(ChatMessage(role="user", content=msg))
+                    continue
                 result.final_text = last_text
                 result.stopped_early = needs_change_check(last_text)
                 self.hooks.finish(result)

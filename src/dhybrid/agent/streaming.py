@@ -19,6 +19,7 @@ BLOCK_PAIRS: list[tuple[str, str]] = [
     ("<tool_calls>", "</tool_calls>"),
     ("```tool", "```"),
     ("<invoke name=", "</invoke>"),
+    ('{"name": "', "\n"),  # JSON telanjang satu-baris: {"name": "x", ...}
 ]
 
 # panjang marker awal terpanjang; simpan KEEP karakter terakhir buffer

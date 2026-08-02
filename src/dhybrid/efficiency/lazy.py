@@ -34,6 +34,13 @@ ATURAN KERJA (prioritas tertinggi):
     jelas dan tawarkan langkah instalasi — jangan menyerah ke stack lain.
 13. Kalau kamu bertanya ke user dan user menjawab (angka/huruf/teks), GUNAKAN
     jawaban itu PERSIS — jangan memilih sendiri yang lain.
+14. PERENCANAAN & PENYELESAIAN: untuk permintaan membangun (buat/buatkan/
+    tambahkan/perbaiki/bikin), susun rencana 1-3 langkah singkat, lalu
+    EKSEKUSI sampai tuntas: buat file, verifikasi (jalankan test/perintah
+    terkecil), baru laporkan. JANGAN berhenti setelah eksplorasi saja.
+    Kalau stack tidak disebut, PILIH default yang toolnya tersedia (cek
+    which php composer node npm python3), langsung buat, lalu sebutkan
+    bisa diganti — jangan tanya dulu.
 """
 
 

@@ -129,6 +129,130 @@ def test_loop_text_mode_tool_fallback():
     assert any("[Hasil tool 'grep']" in m.content for m in client.last_messages if m.role == "user")
 
 
+class QuestionClient(LLMClient):
+    """Turn 1: balik bertanya; turn 2: langsung kerjakan."""
+
+    def __init__(self):
+        self.calls = 0
+        self.last_messages = None
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        self.last_messages = messages
+        if self.calls == 1:
+            yield StreamEvent(kind="delta", text="Mau pakai stack apa?")
+        else:
+            yield StreamEvent(kind="delta", text="Selesai: app.py dibuat dan diverifikasi")
+        yield StreamEvent(kind="done", usage=Usage(prompt_tokens=5, completion_tokens=5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "q-model"
+
+
+def test_loop_nudges_build_request_to_act():
+    """User minta dibuatkan, model balik bertanya tanpa kerja → loop menyodok
+    sekali agar langsung eksekusi, lalu lanjut."""
+    client = QuestionClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("buatkan login register", "sys")
+    assert client.calls == 2
+    assert "app.py" in res.final_text
+    assert any("DIBUATKAN" in m.content for m in client.last_messages if m.role == "user")
+
+
+def test_loop_no_nudge_for_non_build_question():
+    """Bukan permintaan membangun → pertanyaan dibiarkan apa adanya."""
+    client = QuestionClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("jelaskan apa itu python", "sys")
+    assert client.calls == 1
+    assert res.final_text == "Mau pakai stack apa?"
+
+def test_loop_nudge_only_once():
+    """Kalau model tetap bertanya setelah nudge → berhenti (tidak loop selamanya)."""
+
+    class Stubborn(QuestionClient):
+        def stream(self, messages, **kw):
+            self.calls += 1
+            self.last_messages = messages
+            yield StreamEvent(kind="delta", text="Stack apa dulu?")
+            yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    s = Stubborn()
+    loop = AgentLoop(s, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("buatkan aplikasi", "sys")
+    assert s.calls == 3  # 1 asli + 2 nudge (MAX_NUDGES), lalu berhenti
+    assert res.final_text == "Stack apa dulu?"
+
+
+class PromiseClient(LLMClient):
+    """Turn 1: janji mau buat (tanpa eksekusi file); turn 2: jawab final."""
+
+    def __init__(self):
+        self.calls = 0
+        self.last_messages = None
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        self.last_messages = messages
+        if self.calls == 1:
+            yield StreamEvent(kind="delta", text="Saya akan buat dengan Node.js + Express.")
+        else:
+            yield StreamEvent(kind="delta", text="Selesai: app.js dibuat dan diverifikasi")
+        yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "promise"
+
+
+def test_loop_nudges_promise_to_execute():
+    """Model cuma berjanji (tidak ada file dibuat) → disodok 'EKSEKUSI sekarang'."""
+    client = PromiseClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("buatkan aplikasi login", "sys")
+    assert client.calls == 2
+    assert "app.js" in res.final_text
+    assert any("EKSEKUSI SEKARANG" in m.content for m in client.last_messages if m.role == "user")
+
+
+class SilentAfterToolClient(LLMClient):
+    """Turn 1: pakai tool; turn 2: DIAM (jawaban kosong); turn 3: jawab."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        if self.calls == 1:
+            yield StreamEvent(kind="tool_call", tool_call={"id": "t1", "name": "grep", "arguments": {"q": "x"}})
+        elif self.calls == 2:
+            yield StreamEvent(kind="delta", text="")  # diam — tidak ada jawaban
+        else:
+            yield StreamEvent(kind="delta", text="Selesai: hasil ditemukan")
+        yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "silent"
+
+
+def test_loop_nudges_silent_model_to_answer():
+    """Model pakai tool lalu diam (jawaban kosong) → loop menyodok 'beri jawaban'."""
+    client = SilentAfterToolClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    res = loop.run("cari x", "sys")
+    assert client.calls == 3  # tool → diam(nudge) → jawab
+    assert res.final_text == "Selesai: hasil ditemukan"
+
+
 def test_loop_tool_errors_dont_loop_forever():
     loop = AgentLoop(
         ScriptedClient(["errtool", "errtool", "errtool", "text:akhir"]),

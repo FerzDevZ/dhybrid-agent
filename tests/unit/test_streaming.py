@@ -112,3 +112,38 @@ def test_parse_mixed_formats_dedupes():
     t = '```tool\n{"name": "grep", "arguments": {"pattern": "x"}}\n```\n<invoke name="grep">{"pattern": "x"}</invoke>'
     calls = dedupe_tool_calls(parse_tool_calls(t))
     assert len(calls) == 1
+
+
+def test_parse_bare_json_calls():
+    """Tool call JSON TELANJANG (tanpa fenced) — format yang sering dipakai model zen."""
+    from dhybrid.agent.parsing import parse_tool_calls
+
+    t = (
+        'Rencana:\n{"name": "write_file", "arguments": {"path": "app.py", "content": "print(1)"}}\n'
+        '{"name": "terminal", "arguments": {"command": "python3 app.py"}}\nSelesai.'
+    )
+    calls = parse_tool_calls(t)
+    names = [c["name"] for c in calls]
+    assert "write_file" in names and "terminal" in names
+    wf = next(c for c in calls if c["name"] == "write_file")
+    assert wf["arguments"]["path"] == "app.py"
+
+
+def test_parse_bare_json_skips_prose():
+    """JSON biasa dalam prosa (bukan tool call) tidak ikut dieksekusi."""
+    from dhybrid.agent.parsing import parse_tool_calls
+
+    t = 'Jawaban saya: {"data": [1,2,3]} dan itu saja.'
+    assert parse_tool_calls(t) == []
+
+
+def test_filter_hides_bare_json_block():
+    full = 'Saya buat file:\n{"name": "write_file", "arguments": {"path": "a.py", "content": "x"}}\nSelesai.'
+    out = []
+    filt = ToolBlockFilter(out.append)
+    for i in range(0, len(full), 3):
+        filt.feed(full[i:i + 3])
+    filt.flush()
+    joined = "".join(out)
+    assert '"name"' not in joined
+    assert "Saya buat file:" in joined and "Selesai." in joined
