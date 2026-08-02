@@ -6,7 +6,7 @@ Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first
 
 ## Fitur
 
-- **Hybrid router** — klasifikasi task (heuristik + cache) → model kecil untuk grep/test/edit, model besar untuk debug/arsitektur; eskalasi otomatis saat gagal.
+- **Satu model, pilih bebas** — satu model utama yang bisa diganti kapan saja (preset / manual) via `/settings`; router hybrid kecil/besar tetap tersedia sebagai opsi config `small_model`.
 - **12 teknik hemat token** — lazy policies, context compaction, prompt caching (Anthropic cache_control), tool output cap, diff-based edit, semantic cache, early-stop, dsb.
 - **Multi-provider cloud** — OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek (satu adaptor OpenAI-compatible + adaptor Anthropic native).
 - **Tool lengkap** — terminal (dengan gerbang keamanan), read/write range, apply_patch diff-minimal, grep/find, git (commit aman), pytest runner, TDD status, todo, memory jangka panjang (FTS5), subagent delegation.
@@ -55,7 +55,7 @@ dhybrid resume <session_id>      # lanjutkan sesi lama
 
 ## Konfigurasi
 
-`config/default.yaml` — model utama, small model (router), budget, preset 10 provider:
+`config/default.yaml` — model utama, budget, preset provider:
 
 ```bash
 dhybrid repl --model anthropic-big     # model utama = Claude Sonnet

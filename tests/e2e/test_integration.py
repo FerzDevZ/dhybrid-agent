@@ -52,8 +52,8 @@ def test_full_stack(monkeypatch, tmp_path):
     # pesan tersimpan untuk resume
     assert len(store.last_messages(ctx.sid)) >= 2
 
-    # router mencatat statistik (prompt "cari" → small)
-    assert ctx.router.stats["small"] >= 1
+    # default config: SATU model (tanpa router) — semua tugas via model utama
+    assert ctx.router is None
 
 
 def test_skills_injected_into_prompt(monkeypatch, tmp_path):

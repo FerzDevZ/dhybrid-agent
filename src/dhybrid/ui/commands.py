@@ -64,13 +64,12 @@ def cmd_settings(ctx) -> None:
         print(key_row)
         print()
         print("  1. Ganti model utama  (preset / provider:model / model manual apa pun)")
-        print("  2. Ganti model kecil  (router hybrid; '-' untuk nonaktifkan)")
-        print("  3. Atur API key      (pilih provider mana yang diisi)")
-        print("  4. Daftar semua preset")
-        print("  5. Token & biaya sesi")
+        print("  2. Atur API key      (pilih provider mana yang diisi)")
+        print("  3. Daftar semua preset")
+        print("  4. Token & biaya sesi")
         print("  0. Kembali")
         try:
-            choice = input("  pilih (0-5): ").strip()
+            choice = input("  pilih (0-4): ").strip()
         except (EOFError, KeyboardInterrupt):
             print("  [kembali]")
             return
@@ -79,12 +78,10 @@ def cmd_settings(ctx) -> None:
         if choice == "1":
             _settings_model(ctx)
         elif choice == "2":
-            _settings_small(ctx)
-        elif choice == "3":
             cmd_setup(ctx)
-        elif choice == "4":
+        elif choice == "3":
             _list_presets(ctx)
-        elif choice == "5":
+        elif choice == "4":
             _print_tokens(ctx)
         else:
             print(style("  pilihan tidak valid", "33"))
@@ -107,22 +104,6 @@ def _settings_model(ctx) -> None:
         print(style("  " + ctx.set_model(val), "32"))
     except KeyError as e:
         print(style(f"  ERROR: {e}", "31"))
-
-
-def _settings_small(ctx) -> None:
-    print("  Preset kecil tersedia:")
-    _list_presets(ctx)
-    try:
-        val = input("  Nama preset / model manual / '-' untuk nonaktifkan [kosong = batal]: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("  [batal]")
-        return
-    if not val:
-        return
-    if val.startswith("/"):
-        print(style("  (input dimulai '/' — dianggap perintah, model tidak diubah)", "33"))
-        return
-    print(style("  " + ctx.set_small_model(val), "32"))
 
 
 def cmd_setup(ctx) -> None:

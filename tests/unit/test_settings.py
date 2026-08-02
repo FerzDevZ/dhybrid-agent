@@ -52,3 +52,10 @@ def test_set_small_model_preset(ctx):
     out = ctx.set_small_model("opencode-zen-fast")
     assert "opencode-zen-fast" in out
     assert ctx.router is not None
+
+
+def test_default_single_model_no_router(ctx):
+    """Default config: SATU model, tanpa router/model kecil — semua tugas
+    memakai model utama."""
+    assert ctx.small_model_name is None
+    assert ctx.router is None

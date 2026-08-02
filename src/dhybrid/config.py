@@ -43,11 +43,21 @@ class Config:
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Config:
-        path = Path(path) if path else Path("config/default.yaml")
+        """Cari config: path eksplisit → cwd/config/default.yaml → config bawaan
+        di direktori install (biar jalan dari folder mana pun)."""
+        candidates: list[Path] = []
+        if path:
+            candidates.append(Path(path))
+        else:
+            candidates.append(Path("config/default.yaml"))
+            candidates.append(Path(__file__).resolve().parents[2] / "config" / "default.yaml")
         cfg = cls()
-        if not path.exists():
-            return cfg
-        data = yaml.safe_load(path.read_text()) or {}
+        data: dict | None = None
+        for cand in candidates:
+            if cand.exists():
+                data = yaml.safe_load(cand.read_text()) or {}
+                break
+        data = data or {}
 
         if "workspace" in data:
             cfg.workspace = Path(data["workspace"]).expanduser()

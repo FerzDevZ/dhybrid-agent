@@ -152,10 +152,7 @@ class SessionContext:
         return f"model kecil -> {name} ({cfg.model} via {cfg.provider})"
 
     def current_model_label(self) -> str:
-        label = f"{self.model_cfg.model} ({self.model_cfg.provider})"
-        if self.small_model_name:
-            label += f" + small={self.small_model_name}"
-        return label
+        return f"{self.model_cfg.model} ({self.model_cfg.provider})"
 
     # ---------- usage recording ----------
 

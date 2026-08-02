@@ -131,7 +131,29 @@ def _run_one(ctx, raw: str) -> None:
     ctx.steps = 0
     ctx.last_cost = 0.0
     print()  # baris baru sebelum streaming
-    run_agent(ctx, prompt)
+
+    # catat berapa banyak yang benar-benar ter-streaming ke layar
+    streamed = {"chars": 0}
+    orig_delta = ctx.hooks.on_delta
+
+    def _counting_delta(text: str) -> None:
+        streamed["chars"] += len(text)
+        if orig_delta:
+            orig_delta(text)
+
+    ctx.hooks.on_delta = _counting_delta
+    try:
+        final = run_agent(ctx, prompt)
+    finally:
+        ctx.hooks.on_delta = orig_delta
+
+    # jawaban final: tampilkan bila belum ter-stream (error / respons kosong / non-stream)
+    if final and final.strip():
+        if final.startswith("[error"):
+            print(style(final, "31"))
+        elif streamed["chars"] == 0:
+            print(final)
+
     print(style(f"\n[done — {ctx.budget.used:,} token, ${ctx.last_cost:.4f}]", "90"))
     if ctx.router:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]", "90"))

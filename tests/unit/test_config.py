@@ -37,8 +37,8 @@ def test_opencode_zen_route_preset():
     assert client.base_url == "https://opencode.ai/zen/v1"
     # tanpa key → tidak ada header Authorization (endpoint gratis)
     assert "Authorization" not in client._headers()
-    # default small model = route zen (gratis)
-    assert cfg.small_model == "opencode-zen-fast"
+    # default config: SATU model saja (tanpa model kecil)
+    assert cfg.small_model is None
 
 
 def test_resolve_preset_and_inline():
