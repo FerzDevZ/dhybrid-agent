@@ -215,12 +215,12 @@ def _run_one(ctx, raw: str) -> None:
     if result.escalated_quality:
         esc_msg = f" (escalation: model → kuat)"
     print(style(
-        f"\n────────────────────────────────────────────\n"
+        f"\n" + "─" * 44 + "\n"
         f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "
-        f"· test {tmark}]\n"
-        f"────────────────────────────────────────────",
+        f"· test {tmark}\n"
+        + "─" * 44,
         "90"
     ))
     if ctx.router:
