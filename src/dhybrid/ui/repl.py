@@ -54,7 +54,7 @@ def show_welcome(ctx) -> None:
     print("  MENU — pilih dengan prefix /, atau langsung ketik pertanyaan:")
     print()
     print("  ⚙️  /settings           semua pengaturan: model (manual), key, preset, dsb")
-    print("  🤖 /model <nama>        ganti model cepat (preset / manual)   /key <prov> <nilai>  set key")
+    print("  🤖 /model <nama>        ganti model (preset / manual, mis. gpt-5.6-luna)   /key <prov> <nilai>  set key")
     print("  💰 /tokens              dashboard token & biaya               /compact             ringkas konteks")
     print("  📂 /sessions            sesi sebelumnya                       /clear               reset percakapan")
     print("  🧠 /skills              lihat skill aktif                     /help                semua perintah")

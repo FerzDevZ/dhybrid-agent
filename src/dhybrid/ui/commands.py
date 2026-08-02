@@ -100,6 +100,9 @@ def _settings_model(ctx) -> None:
         return
     if not val:
         return
+    if val.startswith("/"):
+        print(style("  (input dimulai '/' — dianggap perintah, model tidak diubah)", "33"))
+        return
     try:
         print(style("  " + ctx.set_model(val), "32"))
     except KeyError as e:
@@ -115,6 +118,9 @@ def _settings_small(ctx) -> None:
         print("  [batal]")
         return
     if not val:
+        return
+    if val.startswith("/"):
+        print(style("  (input dimulai '/' — dianggap perintah, model tidak diubah)", "33"))
         return
     print(style("  " + ctx.set_small_model(val), "32"))
 
@@ -176,13 +182,26 @@ def handle_command(cmd: str, ctx) -> bool:
     elif name == "/model":
         if arg:
             try:
-                print(ctx.set_model(arg))
+                print(style(ctx.set_model(arg), "32"))
             except KeyError as e:
                 print(style(f"ERROR: {e}", "31"))
                 print(f"preset tersedia: {', '.join(ctx.registry.names())}")
         else:
             print(f"model aktif: {ctx.current_model_label()}")
             print(f"preset tersedia: {', '.join(ctx.registry.names())}")
+            try:
+                val = input("  Nama preset / provider:model / model manual [kosong = batal]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("  [batal]")
+                return False
+            if val:
+                if val.startswith("/"):
+                    print(style("  (input dimulai '/' — dianggap perintah, model tidak diubah)", "33"))
+                    return False
+                try:
+                    print(style(ctx.set_model(val), "32"))
+                except KeyError as e:
+                    print(style(f"ERROR: {e}", "31"))
     elif name == "/models":
         _list_presets(ctx)
     elif name == "/tokens":
