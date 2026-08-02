@@ -65,7 +65,7 @@ def cmd_settings(ctx) -> None:
         print()
         print("  1. Ganti model utama  (preset / provider:model / model manual apa pun)")
         print("  2. Ganti model kecil  (router hybrid; '-' untuk nonaktifkan)")
-        print("  3. Atur API key      (wizard)")
+        print("  3. Atur API key      (pilih provider mana yang diisi)")
         print("  4. Daftar semua preset")
         print("  5. Token & biaya sesi")
         print("  0. Kembali")
@@ -126,22 +126,39 @@ def _settings_small(ctx) -> None:
 
 
 def cmd_setup(ctx) -> None:
-    """Wizard API key — cukup tempel key, sisanya diurus."""
-    print(style("SETUP API KEY — tempel key untuk provider yang kamu punya (kosong = lewati):", "1;36"))
-    missing = [(n, e) for n, e, ok in _key_status() if not ok]
-    if not missing:
-        print("  Semua API key sudah terisi. 👍")
-        return
-    for name, env in missing:
+    """Wizard API key — PILIH provider dulu, baru tempel key-nya (tidak ditanya 1-per-1)."""
+    import os
+
+    while True:
+        print(style("\n=== ATUR API KEY ===", "1;36"))
+        print("  pilih provider mana yang mau diisi:")
+        for i, (name, env) in enumerate(PROVIDERS, start=1):
+            ok = bool(os.environ.get(env))
+            mark = "✓" if ok else "✗"
+            note = "  (opsional, gratis)" if "ZEN" in env else ""
+            print(f"  {i}. {name:<32} {mark}{note}")
+        print("  0. Kembali")
         try:
-            val = input(f"  {name} ({env}): ").strip()
+            choice = input(f"  pilih provider (0-{len(PROVIDERS)}): ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("  [dibatalkan]")
+            print("  [kembali]")
             return
-        if val:
-            p = set_env_key(env, val)
-            print(style(f"  OK: {env} disimpan di {p}", "32"))
-    print(style("Selesai! Key langsung aktif di sesi ini.", "32"))
+        if choice == "0":
+            return
+        try:
+            name, env = PROVIDERS[int(choice) - 1]
+        except (ValueError, IndexError):
+            print(style("  pilihan tidak valid", "33"))
+            continue
+        try:
+            val = input(f"  Paste key {name} ({env}) [kosong = batal]: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("  [batal]")
+            continue
+        if not val:
+            continue
+        p = set_env_key(env, val)
+        print(style(f"  OK: {env} disimpan di {p} — langsung aktif.", "32"))
 
 
 def cmd_key(ctx, arg: str) -> None:

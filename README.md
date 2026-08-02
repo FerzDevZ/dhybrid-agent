@@ -63,7 +63,7 @@ dhybrid repl --model gemini-fast       # model kecil = Gemini Flash
 export DHYBRID_MODEL=gpt-4o            # atau via env
 ```
 
-Preset tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `opencode-zen-fast/big/codex` (route https://opencode.ai/zen/v1 — gratis tanpa API key).
+Preset tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `opencode-zen-*` (9 preset route https://opencode.ai/zen/v1 — 6 di antaranya **gratis tanpa API key**: fast/big/codex/nemotron/laguna/ling/mimo/north, model `*-free`).
 
 **Default model = route opencode zen gratis** (`deepseek-v4-flash-free`): dhybrid langsung bisa dipakai TANPA API key. Ganti model kapan saja via `/settings` (bisa input model manual) atau `dhybrid --model <preset>`.
 
