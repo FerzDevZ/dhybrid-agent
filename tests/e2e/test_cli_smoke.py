@@ -15,7 +15,7 @@ def run_cli(*args, timeout=60):
 
 
 def test_bare_dhybrid_launches_repl_with_menu():
-    """`dhybrid` tanpa subcommand → langsung menu + REPL siap pakai."""
+    """`dhybrid` tanpa subcommand → langsung menu lengkap + REPL siap pakai."""
     p = subprocess.run(
         [sys.executable, "-m", "dhybrid", "--cwd", "/tmp"],
         input="/quit\n",
@@ -27,6 +27,8 @@ def test_bare_dhybrid_launches_repl_with_menu():
     assert p.returncode == 0
     assert "dhybrid-agent" in p.stdout          # banner
     assert "MENU" in p.stdout                   # menu utama
+    assert "/setup" in p.stdout                 # menu lengkap: atur API key
+    assert "/models" in p.stdout                # menu lengkap: daftar preset
     assert "dhybrid>" in p.stdout               # prompt siap pakai
 
 

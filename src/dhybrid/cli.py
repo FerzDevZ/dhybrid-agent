@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dhybrid import __version__
 from dhybrid.config import Config
-from dhybrid.dotenv import load_dotenv
+from dhybrid.dotenv import load_standard_dotenvs
 from dhybrid.session.context import SessionContext
 from dhybrid.session.store import SessionStore
 from dhybrid.ui.render import style
@@ -114,7 +114,7 @@ def cmd_skills(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    load_dotenv()
+    load_standard_dotenvs()
     parser = argparse.ArgumentParser(
         prog="dhybrid",
         description="dhybrid-agent — CLI coding agent hemat token (hybrid routing). "

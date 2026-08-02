@@ -45,18 +45,22 @@ BANNER = r"""
 
 
 def show_welcome(ctx) -> None:
-    """Banner + menu utama (muncul setiap kali dhybrid dijalankan)."""
+    """Banner + menu utama lengkap (muncul setiap kali dhybrid dijalankan)."""
     print(style(BANNER, "36"))
     print(style(f"  dhybrid-agent v{__version__} — coding agent hemat token (hybrid routing)", "1;36"))
     print(f"  model utama : {ctx.current_model_label()}")
     print(f"  workspace   : {ctx.cwd}")
     print()
-    print("  MENU — ketik perintah langsung, atau:")
-    print("  " + style("/model <preset>", "32") + "   ganti model        " + style("/tokens", "32") + "   dashboard hemat token")
-    print("  " + style("/compact", "32") + "     ringkas konteks    " + style("/skills", "32") + "   lihat skill aktif")
-    print("  " + style("/sessions", "32") + "    sesi sebelumnya    " + style("/help", "32") + "    daftar perintah")
-    print("  " + style("/quit", "32") + "      keluar")
+    print("  MENU — pilih dengan prefix /, atau langsung ketik pertanyaan:")
     print()
+    print("  🔑 /setup             atur API key (wizard)      /key <prov> <nilai>   set key cepat")
+    print("  🤖 /model <preset>    ganti model utama          /models               daftar semua preset")
+    print("  💰 /tokens            dashboard token & biaya    /compact              ringkas konteks")
+    print("  📂 /sessions          sesi sebelumnya            /clear                reset percakapan")
+    print("  🧠 /skills            lihat skill aktif          /help                 semua perintah")
+    print("  🚪 /quit              keluar")
+    print()
+    print(style("  Tips: tanpa API key pun bisa dipakai — route opencode zen gratis sudah jadi default.", "90"))
 
 
 def repl_loop(ctx) -> int:

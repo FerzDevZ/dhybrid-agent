@@ -2,25 +2,88 @@
 
 from __future__ import annotations
 
+from dhybrid.dotenv import set_env_key
 from dhybrid.ui.render import style
+
+# nama ramah -> env var API key
+PROVIDERS = [
+    ("OpenAI", "OPENAI_API_KEY"),
+    ("Anthropic", "ANTHROPIC_API_KEY"),
+    ("OpenRouter", "OPENROUTER_API_KEY"),
+    ("Gemini", "GEMINI_API_KEY"),
+    ("Groq", "GROQ_API_KEY"),
+    ("DeepSeek", "DEEPSEEK_API_KEY"),
+    ("OpenCode Zen (opsional, gratis)", "OPENCODE_ZEN_API_KEY"),
+]
+
+
+def _key_status() -> list[tuple[str, str, bool]]:
+    import os
+
+    return [(name, env, bool(os.environ.get(env))) for name, env in PROVIDERS]
 
 
 def print_help() -> None:
     print(
         style(
             """
-/help            — bantuan ini
-/model [preset]  — lihat / ganti model utama (preset: openai-fast, anthropic-big, ...)
-/tokens          — dashboard token & biaya sesi ini
-/compact         — paksa kompaksi konteks (ringkas pesan lama)
-/clear           — reset konteks percakapan (simpan ringkasan)
-/sessions        — daftar sesi sebelumnya
-/skills          — daftar skill yang tersedia
-/quit, /exit     — keluar
+MENU LENGKAP — pilih dengan prefix / :
+
+  🔑 /setup              wizard atur API key (panduan interaktif)
+  🔑 /key <prov> <nilai> set key cepat, contoh: /key openai sk-xxxx
+  🤖 /model [preset]     lihat / ganti model utama
+  🤖 /models             daftar semua preset model
+  💰 /tokens             dashboard token & biaya sesi ini
+  📂 /compact            ringkas konteks (pesan lama)
+  📂 /clear              reset konteks percakapan
+  📂 /sessions           daftar sesi sebelumnya
+  🧠 /skills             daftar skill yang tersedia
+  🚪 /quit, /exit        keluar
+
+CLI (di luar REPL): dhybrid run "<prompt>" · dhybrid resume <id> ·
+dhybrid tokens · dhybrid sessions
 """,
             "36",
         )
     )
+
+
+def cmd_setup(ctx) -> None:
+    """Wizard API key — cukup tempel key, sisanya diurus."""
+    print(style("SETUP API KEY — tempel key untuk provider yang kamu punya (kosong = lewati):", "1;36"))
+    missing = [(n, e) for n, e, ok in _key_status() if not ok]
+    if not missing:
+        print("  Semua API key sudah terisi. 👍")
+        return
+    for name, env in missing:
+        try:
+            val = input(f"  {name} ({env}): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("  [dibatalkan]")
+            return
+        if val:
+            p = set_env_key(env, val)
+            print(style(f"  OK: {env} disimpan di {p}", "32"))
+    print(style("Selesai! Key langsung aktif di sesi ini.", "32"))
+
+
+def cmd_key(ctx, arg: str) -> None:
+    """/key <provider> <nilai> — mis. /key openai sk-xxxx"""
+    parts = arg.split(maxsplit=1)
+    if len(parts) != 2:
+        print(style("Pemakaian: /key <provider> <nilai>  (provider: openai, anthropic, openrouter, gemini, groq, deepseek, zen)", "33"))
+        return
+    name, value = parts[0].lower(), parts[1].strip()
+    env_map = {n.split()[0].lower(): e for n, e in PROVIDERS}
+    if name == "zen":
+        env = "OPENCODE_ZEN_API_KEY"
+    else:
+        env = env_map.get(name)
+        if env is None:
+            print(style(f"Provider '{name}' tidak dikenal. Pilih: {', '.join(sorted(env_map))}, zen", "31"))
+            return
+    p = set_env_key(env, value)
+    print(style(f"OK: {env} disimpan di {p} — langsung aktif.", "32"))
 
 
 def handle_command(cmd: str, ctx) -> bool:
@@ -33,6 +96,10 @@ def handle_command(cmd: str, ctx) -> bool:
         return True
     if name == "/help":
         print_help()
+    elif name == "/setup":
+        cmd_setup(ctx)
+    elif name == "/key":
+        cmd_key(ctx, arg)
     elif name == "/model":
         if arg:
             try:
@@ -43,6 +110,10 @@ def handle_command(cmd: str, ctx) -> bool:
         else:
             print(f"model aktif: {ctx.current_model_label()}")
             print(f"preset tersedia: {', '.join(ctx.registry.names())}")
+    elif name == "/models":
+        for preset in sorted(ctx.registry.names()):
+            mc = ctx.registry.resolve(preset)
+            print(f"  {preset:<18} {mc.model}  (via {mc.provider})")
     elif name == "/tokens":
         _print_tokens(ctx)
     elif name == "/compact":

@@ -63,3 +63,27 @@ def test_model_cost():
 
     mc = ModelConfig(cost_per_1k_input=2.0, cost_per_1k_output=10.0)
     assert mc.cost(1000, 500) == pytest.approx(2.0 + 5.0)
+
+
+def test_set_env_key_appends_and_replaces(tmp_path, monkeypatch):
+    from dhybrid.dotenv import set_env_key
+
+    envf = tmp_path / ".env"
+    envf.write_text("# komentar\nOPENAI_API_KEY=old\nOTHER=x\n")
+    p = set_env_key("OPENAI_API_KEY", "new-key", path=envf)
+    assert p == envf
+    content = envf.read_text()
+    assert "OPENAI_API_KEY=new-key" in content
+    assert "OPENAI_API_KEY=old" not in content
+    assert "OTHER=x" in content          # baris lain utuh
+    assert monkeypatch  # env di-set langsung
+    assert os.environ.get("OPENAI_API_KEY") == "new-key"
+
+
+def test_set_env_key_appends_new(tmp_path):
+    from dhybrid.dotenv import set_env_key
+
+    envf = tmp_path / ".env"
+    envf.write_text("FOO=1\n")
+    set_env_key("BAR_API_KEY", "v", path=envf)
+    assert "BAR_API_KEY=v" in envf.read_text()
