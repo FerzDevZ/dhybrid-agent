@@ -5,32 +5,10 @@ from __future__ import annotations
 
 import subprocess
 
-DANGEROUS_PATTERNS = [
-    "rm -rf",
-    "rm -fr",
-    "git push --force",
-    "git push -f",
-    "mkfs",
-    "dd if=",
-    "shutdown",
-    "reboot",
-    "> /dev/sd",
-    ":(){",
-    "chmod -R 777 /",
-    "drop table",
-    "DROP TABLE",
-    "curl | sh",
-    "wget | sh",
-    "sudo rm",
-    "git reset --hard origin",
-]
+from dhybrid.tools.security import is_dangerous
 
 # Callback konfirmasi — di-set oleh UI (repl). None = tolak (default aman).
 confirm_fn: callable | None = None  # type: ignore[assignment]
-
-
-def is_dangerous(command: str) -> bool:
-    return any(p in command for p in DANGEROUS_PATTERNS)
 
 
 def run_command(command: str, timeout: int = 60, max_chars: int = 8000) -> str:

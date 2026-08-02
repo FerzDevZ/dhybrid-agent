@@ -49,10 +49,15 @@ def _parse(patch_text: str) -> tuple[str, list[str], list[str], list[str]]:
 
 
 def apply_patch(patch_text: str, base_dir: str = ".") -> str:
+    from dhybrid.tools.security import check_path_safe
+
     try:
         path, removals, additions, contexts = _parse(patch_text)
     except ValueError as e:
         return f"ERROR: {e}"
+    ok, reason = check_path_safe(path, base=Path(base_dir))
+    if not ok:
+        return f"ERROR: {reason}"
     target = Path(base_dir) / path
     if not target.exists():
         return f"ERROR: target tidak ada: {path}"

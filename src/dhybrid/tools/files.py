@@ -6,6 +6,11 @@ from pathlib import Path
 
 
 def read_file(path: str, offset: int = 1, limit: int = 100, max_chars: int = 8000) -> str:
+    from dhybrid.tools.security import check_path_safe
+
+    ok, reason = check_path_safe(path)
+    if not ok:
+        return f"ERROR: {reason}"
     p = Path(path)
     if not p.exists():
         return f"ERROR: file tidak ada: {path}"
@@ -23,6 +28,11 @@ def read_file(path: str, offset: int = 1, limit: int = 100, max_chars: int = 800
 
 
 def write_file(path: str, content: str) -> str:
+    from dhybrid.tools.security import check_path_safe
+
+    ok, reason = check_path_safe(path)
+    if not ok:
+        return f"ERROR: {reason}"
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content)
