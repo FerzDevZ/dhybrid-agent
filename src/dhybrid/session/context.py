@@ -18,6 +18,7 @@ from dhybrid.session.memory import MemoryStore
 from dhybrid.session.store import SessionStore
 from dhybrid.tools import build_tools
 from dhybrid.tools.registry import ToolRegistry
+from dhybrid.ui.commands import PROVIDERS, _load_provider_enabled
 
 BASE_PROMPT = (
     "Kamu adalah dhybrid-agent, coding agent CLI yang POWERFUL — agresif eksekusi, hemat token. "
@@ -130,9 +131,20 @@ class SessionContext:
         return m
 
     def _build_router(self) -> HybridRouter | None:
+        # Filter presets berdasarkan provider enabled state
+        enabled = _load_provider_enabled()
+        
         big = make_client(self.model_cfg)
         if self.small_model_name:
             small_cfg = self.registry.resolve(self.small_model_name)
+            # Cek apakah provider small model enabled
+            provider_enabled = True
+            for name, env in PROVIDERS:
+                if env == small_cfg.api_key_env:
+                    provider_enabled = _load_provider_enabled().get(name, True)
+                    break
+            if not provider_enabled:
+                return None  # router disabled karena small model provider disabled
             small = make_client(small_cfg)
             self._cost_map[small_cfg.model] = small_cfg
             return HybridRouter(big, small, cache=self.cache)
@@ -149,11 +161,30 @@ class SessionContext:
 
     def resolve_model_input(self, name: str) -> ModelConfig:
         """Terima: nama preset → 'provider:model' → model manual (route/provider aktif)."""
+        # 1. Cek preset dulu
         if name in self.registry.presets:
             return self.registry.resolve(name)
+        # 2. Format provider:model
         if ":" in name:
             return self.registry.resolve(name)
-        # manual: model apa pun di route/provider aktif (mis. di route zen: gpt-5.6-luna)
+        # 3. Model manual - cek apakah model dikenal di preset manapun
+        for preset_name, preset in self.registry.presets.items():
+            if preset.get("model") == name:
+                return ModelConfig(**preset)
+        # 4. Fallback: gunakan provider/base_url dari model utama SAAT INI
+        # TAPI cek apakah model name mengandung keyword opencode-zen
+        if "opencode-zen" in name or name in ("nemotron-3-ultra-free", "deepseek-v4-flash-free", "laguna-s-2.1-free", 
+                                              "ling-3.0-flash-free", "mimo-v2.5-free", "north-mini-code-free"):
+            # Model ini pasti opencode-zen
+            return ModelConfig(
+                provider="openai",
+                model=name,
+                base_url="https://opencode.ai/zen/v1",
+                api_key_env="OPENCODE_ZEN_API_KEY",
+                max_tokens=self.model_cfg.max_tokens,
+                temperature=self.model_cfg.temperature,
+            )
+        # Default: gunakan config model utama
         return ModelConfig(
             provider=self.model_cfg.provider,
             model=name,

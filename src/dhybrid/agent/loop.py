@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from dhybrid.agent.hooks import Hooks
-from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls, strip_tool_block
+from dhybrid.agent.text_parser import extract_tool_calls_from_text
 from dhybrid.agent.quality import score_output
 from dhybrid.agent.streaming import ToolBlockFilter
 from dhybrid.agent.verify import count_created_files, snapshot_files, verify_build
@@ -207,10 +207,10 @@ class AgentLoop:
             filt.flush()
         fallback = False
         if not tool_calls:
-            calls = dedupe_tool_calls(parse_tool_calls(text))
+            calls = extract_tool_calls_from_text(text)
             if calls:
                 tool_calls = calls
-                text = strip_tool_block(text)  # mode teks: simpan teks, buang blok tool
+                text = ""  # mode teks: simpan teks, buang blok tool (sudah di-parse)
                 fallback = True
         return ChatResponse(
             message=ChatMessage(role="assistant", content=text, tool_calls=tool_calls or None),

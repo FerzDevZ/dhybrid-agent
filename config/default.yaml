@@ -2,12 +2,12 @@ workspace: ~/.dhybrid
 
 model:
   # SATU model — dipilih user kapan saja: /settings atau dhybrid --model <preset>.
-  # TANPA model backup/chain. Default = model free yang TERBUKTI jalan tanpa key
-  # (zen nemotron-3-ultra-free). Ganti ke model lain saat key valid.
+  # TANPA model backup/chain. Default = Gemini (gemini-flash-latest, key dari .env).
+  # Jalan TANPA tool calling kalau key kosong. Pilih preset lain di /settings bila perlu.
   provider: openai
-  model: nemotron-3-ultra-free
-  base_url: https://opencode.ai/zen/v1
-  api_key_env: OPENCODE_ZEN_API_KEY
+  model: gemini-flash-latest
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  api_key_env: GEMINI_API_KEY
   max_tokens: 4096
   temperature: 0.2
   chain: ["opencode-zen-big", "openrouter-big", "anthropic-big"]  # escalation quality chain
@@ -67,16 +67,20 @@ presets:
     api_key_env: OPENROUTER_API_KEY
     cost_per_1k_input: 3.0
     cost_per_1k_output: 15.0
+  # Model 2.5 generasi lama (gemini-2.5-flash / 2.5-pro) sudah tidak tersedia
+  # untuk user baru (404 "no longer available") / kena quota 429 pada tier gratis.
+  # Yang terverifikasi jalan: gemini-flash-latest (alias stabil) & gemini-3.x-flash.
+  # Model Pro butuh tier berbayar.
   gemini-fast:
     provider: openai
-    model: gemini-2.5-flash
+    model: gemini-flash-latest
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     api_key_env: GEMINI_API_KEY
     cost_per_1k_input: 0.1
     cost_per_1k_output: 0.4
   gemini-big:
     provider: openai
-    model: gemini-2.5-pro
+    model: gemini-3.6-flash
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     api_key_env: GEMINI_API_KEY
     cost_per_1k_input: 1.25
