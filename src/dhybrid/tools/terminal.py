@@ -12,6 +12,8 @@ confirm_fn: callable | None = None  # type: ignore[assignment]
 
 
 def run_command(command: str, timeout: int = 60, max_chars: int = 8000) -> str:
+    if not command or not command.strip():
+        return "ERROR: command kosong — tidak ada yang dijalankan."
     if is_dangerous(command):
         if confirm_fn is None:
             return "ERROR: perintah terdeteksi berbahaya dan mode konfirmasi non-aktif — ditolak."

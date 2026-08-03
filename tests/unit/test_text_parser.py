@@ -68,3 +68,28 @@ def test_legacy_tool_block_still_parsed():
 def test_terminal_command_fired():
     calls = extract_tool_calls_from_text("Jalankan perintah python test.py")
     assert any(c["name"] == "terminal" for c in calls)
+
+
+def test_broken_tool_call_markup_not_fired():
+    """Markup tool RUSAK (model free menulis <tool_call><parameter ...> tanpa
+    penutup valid) JANGAN diterjemahkan parser natural-language. Dulu kata
+    \"terminal\"/\"command\" di dalam markup dieksekusi sebagai garbage →
+    shell error \"cannot open /parameter\"."""
+    broken = (
+        "<tool_call>\n"
+        "<parameter\nname\n>\nterminal\n</parameter\n>\n"
+        "<parameter\ncommand\n>\ncd /home/firman/ppj/auth-app\n</parameter\n>\n"
+        "</,\n"
+    )
+    assert extract_tool_calls_from_text(broken) == []
+
+
+def test_strip_parameter_tags():
+    from dhybrid.agent.parsing import strip_tool_block
+
+    cleaned = strip_tool_block(
+        "<tool_call>\n<parameter name=\"terminal\">x</parameter>\n</tool_call>\nsisa teks"
+    )
+    assert "<parameter" not in cleaned
+    assert "tool_call" not in cleaned
+    assert "sisa teks" in cleaned

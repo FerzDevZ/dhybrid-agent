@@ -240,7 +240,7 @@ def strip_tool_block(text: str) -> str:
     text = TOOLCALLS_RE.sub("", text)
     text = FUNC_TAG_RE.sub("", text)
     text = re.sub(
-        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|function|analysis|anteThinking)\b[^>]*>",
+        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|function|analysis|anteThinking|parameter)\b[^>]*>",
         "",
         text,
         flags=re.IGNORECASE,

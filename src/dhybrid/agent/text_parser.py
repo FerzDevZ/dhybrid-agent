@@ -9,6 +9,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+# Markup tool yang rusak/tidak lengkap (mis. <tool_call><parameter name=...> tanpa
+# penutup valid, ```tool tanpa ```) → JANGAN diterjemahkan parser natural-language.
+# Kata "terminal"/"command" DI DALAM markup itu bukan perintah sungguhan — dulu
+# dieksekusi sebagai garbage (shell error: "cannot open /parameter").
+BROKEN_MARKUP_RE = re.compile(
+    r"<tool_call|<parameter|</parameter|<invoke|<function|```tool|<tool_calls",
+    re.IGNORECASE,
+)
+
 # Pattern untuk mendeteksi intent coding di teks natural
 FILE_CREATE_PATTERNS = [
     r"(?:buat|buatkan|bikin|create|make)\s+(?:file\s+)?[`\"']?([\w\/\.\-]+\.\w+)[`\"']?\s*(?:dengan|berisi|isi)\s*[`\"']?([\s\S]*?)[`\"']?(?:\s*$|\s*\.)",
@@ -183,6 +192,11 @@ def extract_tool_calls_from_text(text: str, min_confidence: float = 0.5) -> list
         return legacy_calls
     
     # Then try natural language parsing
+    if BROKEN_MARKUP_RE.search(text):
+        # Ada upaya markup tool yang gagal — parser NL akan menangkap kata
+        # "terminal"/"command" di dalamnya dan menembak tool garbage.
+        # Lebih baik TIDAK fire apa pun (loop akan menangani sebagai teks).
+        return []
     parser = TextToToolParser()
     calls = parser.parse(text)
     return [

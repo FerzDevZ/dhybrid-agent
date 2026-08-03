@@ -453,6 +453,24 @@ def test_loop_retries_transient_429():
     assert res.final_text == "Selesai ok."
 
 
+def test_loop_intent_text_nudged_not_final():
+    """'Saya akan cek dan start server:' (niat tanpa tool di pesan itu) TIDAK boleh
+    langsung DONE — di-nudge untuk eksekusi, lalu selesai normal di turn berikutnya."""
+    client = ScriptedClient([
+        "text:Server belum berjalan. Saya akan cek dan start server:",
+        "text:Server sudah jalan di http://127.0.0.1:8000",
+    ])
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD)
+    res = loop.run("oke coba jalankan webnya", "sys")
+    assert res.steps == 2, "niat 'saya akan' harus di-nudge, bukan langsung DONE"
+    assert "8000" in res.final_text
+    assert any(
+        "NIAT" in (m.content or "")
+        for m in (client.last_messages or [])
+        if m.role == "user"
+    )
+
+
 def test_loop_429_all_models_fails_friendly_message():
     """Kalaupun semua retry gagal tanpa fallback, DONE pakai pesan ramah —
     bukan stack mentah '429 Too Many Requests'."""

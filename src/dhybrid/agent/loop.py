@@ -51,6 +51,20 @@ EXEC_MSG = (
     "User meminta DIBUATKAN. EKSEKUSI SEKARANG: buat file dengan write_file/apply_patch, "
     "verifikasi dengan perintah terkecil, lalu laporkan hasilnya."
 )
+INTENT_MSG = (
+    "[instruksi sistem] Kamu baru MENYATAKAN NIAT (\"saya akan...\") tapi belum mengeksekusi "
+    "apa pun di pesan ini. Jangan berhenti di janji/rencana — EKSEKUSI SEKARANG: jalankan "
+    "tool (terminal/write_file/apply_patch) dan kerjakan sampai tuntas, lalu laporkan hasil nyata."
+)
+# Sinyal "niat tanpa eksekusi": model bilang akan mengerjakan tapi belum menjalankan tool.
+# (Hindari kata terlalu pendek seperti "lanjut"/"mari" polos — "ok, lanjut" itu jawaban sah.)
+INTENT_HINTS = (
+    "saya akan", "aku akan", "akan saya", "akan kucek", "akan kucoba", "nanti saya",
+    "nanti akan", "saya lanjutkan", "mari kita", "mari mulai", "sekarang saya",
+    "berikutnya saya", "saya mulai", "saya cek dulu", "saya periksa dulu",
+    "saya akan cek", "saya akan start", "saya akan jalankan", "saya akan buat",
+    "lanjut eksekusi", "lanjut kerjakan", "lanjut setup",
+)
 CRITIQUE_MSG = (
     "[instruksi sistem] Review hasilmu sendiri sebelum selesai: apakah sudah lengkap, benar, "
     "dan sesuai permintaan user? Perbaiki kekurangan yang kamu temukan, lalu berikan jawaban "
@@ -64,6 +78,18 @@ COMPLETION_SIGNALS = ("selesai", "dibuat", "berhasil", "beres", "siap dipakai", 
 def _looks_complete(text: str) -> bool:
     low = text.lower()
     return any(s in low for s in COMPLETION_SIGNALS)
+
+
+def _expresses_intent(text: str) -> bool:
+    """Deteksi NIAT tanpa eksekusi: \"Saya akan cek dan start server:\" — model
+    berjanji/merencanakan kerja tapi belum menjalankan tool apa pun di pesan itu.
+    Kalimat yang berakhir titik dua (:) juga sinyal 'lanjut eksekusi'."""
+    low = (text or "").lower().strip()
+    if not low:
+        return False
+    if low.endswith(":") and len(low) > 15:
+        return True
+    return any(h in low for h in INTENT_HINTS)
 
 
 def _is_build_request(prompt: str) -> bool:
@@ -496,6 +522,19 @@ class AgentLoop:
                     if is_empty and nudges < self.cfg.max_nudges:
                         nudges += 1
                         self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
+                        continue
+
+                    # 3a2) NIAT tanpa eksekusi: "Saya akan cek dan start server:" —
+                    # model berjanji/merencanakan tapi belum menjalankan tool di
+                    # pesan ini. Jangan dianggap jawaban final (dulu langsung DONE
+                    # "0 file") → suruh EKSEKUSI sekarang.
+                    if (
+                        _expresses_intent(last_text)
+                        and not says_done
+                        and nudges < self.cfg.max_nudges
+                    ):
+                        nudges += 1
+                        self.ctx.push(ChatMessage(role="user", content=INTENT_MSG))
                         continue
 
                     # 3b) nudge build: diminta buat tapi belum ada bukti perubahan → jangan selesai.

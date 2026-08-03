@@ -15,6 +15,36 @@ versi mengikuti [Semantic Versioning](https://semver.org/).
   `NO_COLOR` diset, output teks polos walau di TTY. +3 unit test
   (tests/unit/test_render.py).
 
+## [0.5.4] - 2026-08-03
+
+### Bugfix: agent "tidak benar benar bisa menyelesaikan" (laporan sesi repl)
+
+Dua kegagalan dari sesi nyata (setup Laravel + Breeze di /home/firman/ppj):
+
+1. **Tool garbage dari markup XML rusak** — model free menulis
+   `<tool_call><parameter name="terminal">...` tanpa penutup valid; parser
+   natural-language menangkap kata "terminal"/"command" DI DALAM markup itu dan
+   mengeksekusi perintah sampah (`</parameter` → shell error
+   `/bin/sh: cannot open /parameter`).
+   - `text_parser.py`: teks berisi fragmen markup tool yang rusak
+     (`<tool_call`, `<parameter`, `</parameter`, `<invoke`, `<function`,
+     ````tool``) TIDAK lagi diterjemahkan parser NL → `[]` (loop menangani
+     sebagai teks biasa, bukan menembak tool).
+   - `parsing.py` `strip_tool_block`: tag `<parameter ...>`/`</parameter>`
+     ikut dibersihkan → markup rusak tidak bocor mentah ke transkrip.
+   - `terminal.py`: command kosong/whitespace → ERROR, bukan sukses palsu.
+
+2. **Berhenti prematur di niat** — model menulis "Server belum berjalan. Saya
+   akan cek dan start server:" (niat, belum eksekusi) lalu loop langsung DONE
+   "0 file".
+   - `loop.py`: deteksi NIAT tanpa eksekusi (`_expresses_intent`: frasa
+     "saya akan..."/"nanti..."/"sekarang saya"/kalimat berakhir ":") → di-nudge
+     INTENT_MSG ("EKSEKUSI SEKARANG") sampai `max_nudges`, tidak difinalkan.
+   - Sinyal niat TIDAK menimpa jawaban yang sudah mengandung sinyal selesai.
+
++3 test (parser markup rusak, strip parameter, loop nudge niat).
+Total **219 test lulus**, ruff 0.
+
 ## [0.5.2] - 2026-08-03
 
 ### Dev tooling (Tier 3 — kualitas pengembangan)
