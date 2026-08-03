@@ -22,24 +22,27 @@ def _sk(name: str, desc: str) -> Skill:
 
 
 def test_select_skills_fallback_general():
-    names = select_skills("buat web login", [_sk("database", "sql query")])
+    skills = [_sk("database", "sql query"), _sk("general", "panduan umum")]
+    names = select_skills("buat web login", skills)
     assert names == ["general"]
 
 
 def test_select_skills_no_fallback_when_disabled():
-    names = select_skills("buat web login", [_sk("database", "sql query")], fallback=None)
+    skills = [_sk("database", "sql query"), _sk("general", "panduan umum")]
+    names = select_skills("buat web login", skills, fallback=None)
     assert names == []
 
 
 def test_select_skills_keeps_real_match_over_fallback():
-    names = select_skills("buat web login", [_sk("laravel-scaffold", "setup laravel auth")])
+    skills = [_sk("laravel-scaffold", "setup laravel auth web login"), _sk("general", "panduan umum")]
+    names = select_skills("buat web login", skills)
     assert names == ["laravel-scaffold"]
 
 
 def test_inject_skills_fallback_general():
     out = inject_skills("buat web login", [_sk("general", "panduan umum"), _sk("database", "sql query")])
     assert "[SKILL: general]" in out
-    assert "panduan umum" in out
+    assert "body general" in out
 
 
 def test_inject_skills_no_fallback_when_disabled():
