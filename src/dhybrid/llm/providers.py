@@ -91,7 +91,12 @@ class OpenAICompatClient(LLMClient):
                     if isinstance(details, dict)
                     else 0,
                 )
-            delta = chunk["choices"][0].get("delta", {})
+            # Beberapa provider (mis. byNara) kirim chunk terakhir berisi
+            # usage tanpa `choices` → jangan akses [0] kalau kosong (IndexError).
+            choices = chunk.get("choices") or []
+            if not choices:
+                continue
+            delta = choices[0].get("delta", {})
             if delta.get("content"):
                 yield StreamEvent(kind="delta", text=delta["content"])
             for tc in delta.get("tool_calls", []):
@@ -124,7 +129,10 @@ class OpenAICompatClient(LLMClient):
         r = self._post(payload)
         r.raise_for_status()
         data = r.json()
-        msg = data["choices"][0]["message"]
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError(f"respons kosong (tanpa choices): {str(data)[:300]}")
+        msg = choices[0]["message"]
         usage = data.get("usage", {})
         tool_calls = None
         if msg.get("tool_calls"):

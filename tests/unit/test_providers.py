@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 
 from dhybrid.config import ModelConfig
 from dhybrid.llm.base import ChatMessage
@@ -21,6 +22,30 @@ def test_stream_parses_deltas(monkeypatch):
     monkeypatch.setattr(client, "_post", lambda payload: _sse(chunks))
     texts = [e.text for e in client.stream([]) if e.kind == "delta"]
     assert texts == ["hel", "lo"]
+
+
+def test_stream_tolerates_chunk_without_choices(monkeypatch):
+    """Regresi: byNara dsb kirim chunk terakhir berisi usage TANPA choices.
+    Dulu chunk['choices'][0] → IndexError. Harus dilewati tanpa crash."""
+    client = OpenAICompatClient(ModelConfig(provider="openai", model="m", base_url="http://t/v1"))
+    chunks = [
+        {"choices": [{"delta": {"content": "hi"}}]},
+        {"usage": {"prompt_tokens": 1, "completion_tokens": 1}, "choices": []},
+    ]
+    monkeypatch.setattr(client, "_post", lambda payload: _sse(chunks))
+    events = list(client.stream([]))
+    texts = [e.text for e in events if e.kind == "delta"]
+    assert texts == ["hi"]
+    done = [e for e in events if e.kind == "done"]
+    assert done and done[0].usage is not None and done[0].usage.total == 2
+
+
+def test_complete_tolerates_missing_choices(monkeypatch):
+    client = OpenAICompatClient(ModelConfig(provider="openai", model="m", base_url="http://t/v1"))
+    body = {"usage": {"prompt_tokens": 1, "completion_tokens": 1}}  # tanpa choices
+    monkeypatch.setattr(client, "_post", lambda payload: httpx.Response(200, json=body, request=httpx.Request("POST", "http://t")))
+    with pytest.raises(RuntimeError):
+        client.complete([])
 
 
 def test_stream_accumulates_tool_calls(monkeypatch):
