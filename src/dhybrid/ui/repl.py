@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
@@ -15,15 +17,33 @@ from dhybrid.ui.status import (
 
 def run_agent(ctx, prompt: str) -> LoopResult:
     """Jalankan satu task agent; kembalikan hasil (termasuk skor kualitas)."""
-    chain = ctx.model_cfg.chain or []
+    # Saring chain escalation: hanya preset yang provider-nya enabled & resolvable.
+    # Cegah 401/431: buang preset yang key-nya kosong (kecuali route gratis opencode-zen).
+    raw_chain = ctx.model_cfg.chain or []
+    chain: list[str] = []
+    for preset in raw_chain:
+        try:
+            mc = ctx.registry.resolve(preset)
+        except KeyError:
+            continue  # provider disabled / preset tak dikenal → skip
+        env = mc.api_key_env or ""
+        # route gratis (opencode zen) boleh tanpa key; lainnya wajib ada key
+        if env == "OPENCODE_ZEN_API_KEY" or (env and os.environ.get(env)):
+            chain.append(preset)
+
     loop_cfg = LoopConfig(
         max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000),
         escalation_chain=chain,
     )
 
     def _client_factory(preset_name: str):
+        # bila resolve kembali gagal (provider dinonaktifkan di tengah jalan),
+        # lewati ke preset berikutnya daripada crash.
         from dhybrid.llm.providers import make_client
-        return make_client(ctx.registry.resolve(preset_name))
+        try:
+            return make_client(ctx.registry.resolve(preset_name))
+        except KeyError:
+            return None  # loop akan meng-escalate ulang / stop ramah
 
     loop = AgentLoop(
         ctx.router if ctx.router else ctx._fresh_client(),

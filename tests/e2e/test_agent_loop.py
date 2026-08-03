@@ -295,6 +295,42 @@ def test_quality_escalation_chain():
     assert res.final_text.strip() == "ok"
 
 
+def test_quality_rejects_disabled_preset_then_escalates():
+    """Regresi: preset escalation yang factory-nya gagal (provider disabled /
+    key kosong → return None) harus DILEWATI, lalu lanjut ke preset valid
+    berikutnya. Dulu loop crash / berhenti / kena 401 di preset buruk."""
+    low = ScriptedClient([""], name="low")   # skor 0 → trigger escalation
+    high = ScriptedClient(["jawaban bagus"], name="high")
+
+    calls = []
+
+    def factory(preset_name: str):
+        calls.append(preset_name)
+        # preset pertama (mis. openrouter-big tanpa key) → None (disabled)
+        if preset_name == "disabled-big":
+            return None
+        return high
+
+    loop = AgentLoop(
+        low,
+        _tools(),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cfg=LoopConfig(
+            quality_threshold=35,
+            escalation_chain=["disabled-big", "good-big"],  # first gagal, second ok
+            max_escalations=2,
+        ),
+        client_factory=factory,
+    )
+    res = loop.run("jelaskan sistem", "sys")
+    # pertama diminta disabled-big → None → lanjut ke good-big → jalan
+    assert "disabled-big" in calls
+    assert calls[-1] == "good-big"
+    assert res.escalated_quality
+    assert res.final_text.strip() == "jawaban bagus"
+
+
 def test_quality_no_escalation_when_passed():
     """Jika skor tinggi, tidak perlu escalate."""
     ok_model = ScriptedClient(["Jawaban baik dan lengkap"], name="ok")

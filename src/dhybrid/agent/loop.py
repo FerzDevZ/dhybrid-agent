@@ -127,6 +127,28 @@ class AgentLoop:
             return self.router.route(prompt, force=force)
         return self.client  # type: ignore[return-value]
 
+    def _next_valid_escalation(self) -> tuple[str, LLMClient] | None:
+        """Maju ke preset escalation berikutnya yang bisa di-build.
+
+        Lewati preset yang factory-nya gagal (provider disabled / key kosong)
+        sehingga tidak pernah naik ke model tanpa kredensial (mis. 401 OpenRouter).
+        Batasi oleh max_escalations. Return (preset_name, client) atau None bila habis.
+        """
+        if not self.cfg.escalation_chain or self._client_factory is None:
+            return None
+        while (
+            self._n_escalations < self.cfg.max_escalations
+            and self._esc_idx < len(self.cfg.escalation_chain)
+        ):
+            self._esc_idx += 1
+            self._n_escalations += 1
+            next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
+            client = self._client_factory(next_preset)
+            if client is None:
+                continue  # preset tak bisa dibangun → coba berikutnya
+            return next_preset, client
+        return None
+
     def _used_mutating_tool(self) -> bool:
         """Ada tool yang mengubah file? (untuk keputusan nudge)."""
         return any(self.tools.tool_count.get(t, 0) > 0 for t in MUTATING_TOOLS)
@@ -239,20 +261,13 @@ class AgentLoop:
             try:
                 resp = self._step_once(client, self.ctx.render(system_prompt))
             except Exception as e:  # noqa: BLE001 — API error
-                # RETRY: coba ke model berikutnya di escalation chain
-                # (jangan langsung stop — agen tetap berjuang sampai semua model gagal)
-                if (
-                    self.cfg.escalation_chain
-                    and self._client_factory is not None
-                    and self._n_escalations < self.cfg.max_escalations
-                    and self._esc_idx < len(self.cfg.escalation_chain)
-                ):
-                    self._esc_idx += 1
-                    self._n_escalations += 1
+                # RETRY: lewati chain escalation ke model valid berikutnya.
+                # (jangan langsung stop — agen berjuang sampai semua model gagal)
+                nxt = self._next_valid_escalation()
+                if nxt:
+                    next_preset, client = nxt
                     result.escalated_quality = True
                     result.escalation_count = self._n_escalations
-                    next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
-                    client = self._client_factory(next_preset)
                     self.ctx.push(ChatMessage(
                         role="user",
                         content=f"[sistem] Gagal ke model sebelumnya ({type(e).__name__}). "
@@ -304,21 +319,19 @@ class AgentLoop:
                         and self.cfg.escalation_chain
                         and self._client_factory is not None
                         and self._n_escalations < self.cfg.max_escalations
-                        and self._esc_idx < len(self.cfg.escalation_chain)
                     ):
-                        self._esc_idx += 1
-                        self._n_escalations += 1
-                        result.escalated_quality = True
-                        result.escalation_count = self._n_escalations
-                        next_preset = self.cfg.escalation_chain[self._esc_idx - 1]
-                        client = self._client_factory(next_preset)
-                        esc_msg = (
-                            f"[sistem escalation] Skor kualitas rendah ({score}/100). "
-                            f"Beralih ke model yang lebih kuat: {next_preset}. "
-                            f"Selesaikan penuh tanpa bertanya, tanpa berjanji — lakukan eksekusi nyata."
-                        )
-                        self.ctx.push(ChatMessage(role="user", content=esc_msg))
-                        continue
+                        nxt = self._next_valid_escalation()
+                        if nxt:
+                            next_preset, client = nxt
+                            result.escalated_quality = True
+                            result.escalation_count = self._n_escalations
+                            esc_msg = (
+                                f"[sistem escalation] Skor kualitas rendah ({score}/100). "
+                                f"Beralih ke model yang lebih kuat: {next_preset}. "
+                                f"Selesaikan penuh tanpa bertanya, tanpa berjanji — lakukan eksekusi nyata."
+                            )
+                            self.ctx.push(ChatMessage(role="user", content=esc_msg))
+                            continue
                     # catat pertanyaan yang sudah diajukan (mencegah loop bertanya)
                     if _ends_with_question(last_text):
                         self.ctx.facts.mark_asked(last_text.strip())
