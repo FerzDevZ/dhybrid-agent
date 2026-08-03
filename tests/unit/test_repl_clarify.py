@@ -55,6 +55,17 @@ def _make_ctx(tmp_path, monkeypatch):
     cfg = Config.load("config/default.yaml")
     cfg.workspace = tmp_path
     ctx = SessionContext(cfg, SessionStore(tmp_path / "s.sqlite"), cwd=str(tmp_path))
+
+    class _QClient:
+        def complete(self, messages, **kw):
+            from dhybrid.llm.base import ChatMessage, ChatResponse, Usage
+
+            return ChatResponse(
+                message=ChatMessage(role="assistant", content="Mau pakai apa nih?"),
+                usage=Usage(), model="stub",
+            )
+
+    monkeypatch.setattr(ctx, "_fresh_client", lambda: _QClient())
     return ctx, repl_mod, captured
 
 
@@ -130,3 +141,26 @@ def test_run_one_clarify_disabled(tmp_path, monkeypatch, capsys):
     repl_mod._run_one(ctx, "buat web login")
     out = capsys.readouterr().out
     assert "❓" not in out
+
+
+def test_run_one_clarify_ai_question_used(tmp_path, monkeypatch, capsys):
+    ctx, repl_mod, _ = _make_ctx(tmp_path, monkeypatch)
+    monkeypatch.setattr(builtins, "input", lambda *a: "1")
+    repl_mod._run_one(ctx, "buat web login")
+    out = capsys.readouterr().out
+    assert "❓ Mau pakai apa nih?" in out  # pertanyaan dari AI (stub), bukan template
+
+
+def test_run_one_clarify_ai_fallback_template(tmp_path, monkeypatch, capsys):
+    ctx, repl_mod, _ = _make_ctx(tmp_path, monkeypatch)
+
+    class _BoomClient:
+        def complete(self, messages, **kw):
+            raise RuntimeError("offline")
+
+    monkeypatch.setattr(ctx, "_fresh_client", lambda: _BoomClient())
+    monkeypatch.setattr(builtins, "input", lambda *a: "1")
+    repl_mod._run_one(ctx, "buat web login")
+    out = capsys.readouterr().out
+    assert "❓" in out  # tetap muncul — template pool
+    assert "Mau pakai apa nih?" not in out

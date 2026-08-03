@@ -9,6 +9,7 @@ Dipakai REPL SEBELUM agent dipanggil: prompt seperti "buat web login register"
 from __future__ import annotations
 
 import re
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -37,21 +38,24 @@ STACK_OPTIONS_CLI = ["Python", "Node.js", "Go", "Rust"]
 STACK_OPTIONS_MOBILE = ["Flutter", "React Native", "Kotlin (Android)", "Swift (iOS)"]
 STACK_OPTIONS_DEFAULT = ["Python", "PHP (Laravel)", "Next.js", "React + Vite"]
 
-# kategori task → opsi stack populer
-TASK_KINDS: list[tuple[set[str], list[str]]] = [
+# kategori task → opsi stack populer (+ nama pool pertanyaan clarify)
+TASK_KINDS: list[tuple[set[str], list[str], str]] = [
     (
         {"login", "register", "web", "landing", "page", "halaman", "crud",
          "situs", "website", "api", "dashboard", "frontend", "backend", "blog"},
         STACK_OPTIONS_WEB,
+        "web",
     ),
     (
         {"cli", "script", "tool", "otomasi", "automation", "scraping", "bot",
          "cron", "daemon", "utility", "scraper"},
         STACK_OPTIONS_CLI,
+        "cli",
     ),
     (
         {"android", "ios", "mobile", "aplikasi", "app", "flutter", "hp"},
         STACK_OPTIONS_MOBILE,
+        "mobile",
     ),
 ]
 
@@ -98,16 +102,90 @@ def detect_project_stack(cwd: str | None) -> str | None:
     return None
 
 
-def _options_for(words: set[str], proj: str | None) -> list[str]:
-    """Opsi stack untuk kategori task; project di cwd jadi default (index 0)."""
-    for kind_words, opts in TASK_KINDS:
+def _options_for(words: set[str], proj: str | None) -> tuple[list[str], str | None]:
+    """Opsi stack untuk kategori task; project di cwd jadi default (index 0).
+
+    Return (options, kind) — kind dipakai memilih pool pertanyaan clarify.
+    """
+    for kind_words, opts, kind in TASK_KINDS:
         if words & kind_words:
             if proj:
-                return [f"{proj} (proyek ini)"] + [o for o in opts if o != proj]
-            return list(opts)
+                return [f"{proj} (proyek ini)"] + [o for o in opts if o != proj], kind
+            return list(opts), kind
     if proj:
-        return [f"{proj} (proyek ini)"] + [o for o in STACK_OPTIONS_DEFAULT if o != proj]
-    return list(STACK_OPTIONS_DEFAULT)
+        return [f"{proj} (proyek ini)"] + [o for o in STACK_OPTIONS_DEFAULT if o != proj], None
+    return list(STACK_OPTIONS_DEFAULT), None
+
+
+# Pool pertanyaan clarify — diputar deterministik per prompt (crc32) supaya
+# tidak terasa template; kategori task memilih pool-nya (web/cli/mobile).
+QUESTION_POOLS: dict[str, list[str]] = {
+    "web": [
+        "Task ini belum menyebut stack-nya. Mau pakai teknologi yang mana?",
+        "Mau pakai stack apa untuk web ini?",
+        "Stack untuk web ini belum dipilih — mau pakai yang mana?",
+        "Teknologi web-nya belum jelas. Pilih salah satu:",
+        "Untuk bikin web-nya, mau pakai teknologi apa?",
+    ],
+    "cli": [
+        "Belum jelas mau pakai bahasa apa untuk script ini. Pilih salah satu:",
+        "Mau pakai bahasa pemrograman apa untuk task ini?",
+        "Bahasa untuk CLI/script-nya belum disebut — mau pakai yang mana?",
+    ],
+    "mobile": [
+        "Belum jelas mau pakai framework mobile apa. Pilih salah satu:",
+        "Mau pakai framework apa untuk aplikasi mobile-nya?",
+    ],
+    "generic": [
+        "Task ini belum menyebut stack-nya. Mau pakai teknologi yang mana?",
+        "Mau pakai teknologi apa untuk task ini?",
+        "Belum jelas teknologinya — pilih salah satu:",
+    ],
+}
+
+
+def _pick_question(prompt: str, kind: str | None) -> str:
+    pool = QUESTION_POOLS.get(kind or "generic", QUESTION_POOLS["generic"])
+    idx = zlib.crc32(prompt.encode()) % len(pool)
+    return pool[idx]
+
+
+def generate_question(prompt: str, options: list[str], client) -> str:
+    """Generate pertanyaan clarify via LLM — natural & selalu bervariasi.
+
+    Return "" bila gagal/offline → caller memakai template pool (fallback).
+    Model text-only cukup: ini murni teks pendek, biaya token sangat kecil.
+    """
+    from dhybrid.llm.base import ChatMessage
+
+    opts = ", ".join(options[:5])
+    sys_msg = (
+        "Kamu asisten CLI yang ramah dan hemat kata. User memberi prompt tugas yang "
+        "belum menyebut stack/teknologi. Tulis SATU kalimat pertanyaan singkat "
+        "(maks 12 kata, nada santai, bahasa Indonesia) untuk menanyakan teknologi "
+        "yang user mau. JANGAN menyebutkan opsi, JANGAN memberi penjelasan, "
+        "langsung tulis pertanyaannya saja."
+    )
+    user_msg = f'Prompt user: "{prompt}"\nOpsi yang tersedia: {opts}'
+    try:
+        resp = client.complete(
+            [
+                ChatMessage(role="system", content=sys_msg),
+                ChatMessage(role="user", content=user_msg),
+            ]
+        )
+        msg = getattr(resp, "message", None)
+        text = ((getattr(msg, "content", None) or "") if msg else "").strip().strip("\"'")
+    except Exception:  # noqa: BLE001 — gagal/offline → fallback template pool
+        return ""
+    if not text:
+        return ""
+    text = text.splitlines()[0].strip()
+    if len(text) > 120:
+        text = text[:117].rstrip() + "..."
+    if not text.endswith(("?", "？")):
+        text += "?"
+    return text
 
 
 def detect_ambiguity(
@@ -135,8 +213,8 @@ def detect_ambiguity(
         return None
 
     proj = detect_project_stack(cwd)
-    options = _options_for(words, proj)
-    question = "Task ini belum menyebut stack-nya. Mau pakai teknologi yang mana?"
+    options, kind = _options_for(words, proj)
+    question = _pick_question(prompt, kind)
     return ClarifyHint(
         question=question,
         options=options,

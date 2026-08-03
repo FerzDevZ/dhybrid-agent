@@ -195,4 +195,5 @@ skills:
 
 clarify:
   enabled: true   # false → prompt ambigu tidak ditanya, langsung jalan dengan default
+  ai: true        # pertanyaan digenerate AI (natural & bervariasi); false → template pool lokal
   max_per_session: 3  # batas tool clarify (agent tanya di tengah kerja)

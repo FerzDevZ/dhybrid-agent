@@ -46,7 +46,7 @@ try:
     read_until(fd, ">", 30)
     # prompt ambigu tanpa stack
     os.write(fd, b"buat web login register\n")
-    out, found = read_until(fd, "Lanjutkan", 40)
+    out, found = read_until(fd, "Lanjutkan", 120)
     if not found:
         print("\n[SMOKE FAIL] menu clarify tidak muncul")
         ok = False

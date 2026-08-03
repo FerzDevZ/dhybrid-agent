@@ -265,6 +265,17 @@ def _run_one(ctx, raw: str) -> None:
             last_turn_was_answer=was_answered,
         )
         if hint:
+            # Pertanyaan digenerate AI (natural, selalu bervariasi); bila model
+            # gagal/offline → fallback ke template pool (tetap bervariasi).
+            if clarify_cfg.get("ai", True):
+                try:
+                    from dhybrid.agent.intent import generate_question
+
+                    q = generate_question(raw, hint.options, ctx._fresh_client())
+                    if q:
+                        hint.question = q
+                except Exception:  # noqa: BLE001,S110 — fallback template pool
+                    pass  # pertanyaan template (pool) tetap dipakai
             opts = hint.options
             default_no = hint.default_index + 1
             print(style("\n❓ " + hint.question, "1;36"))

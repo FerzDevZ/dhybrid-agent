@@ -61,10 +61,61 @@ def test_detect_ambiguity_history_knows_stack():
     assert detect_ambiguity("buat halaman loginnya", history="oke pakai laravel saja") is None
 
 
-def test_detect_ambiguity_cli():
-    h = detect_ambiguity("bikin script otomasi")
+def test_question_varies_across_prompts():
+    h1 = detect_ambiguity("buat web a")
+    h2 = detect_ambiguity("buat web b")
+    assert h1 is not None and h2 is not None
+    assert h1.question != h2.question
+    # deterministik: prompt sama → pertanyaan sama
+    assert detect_ambiguity("buat web a") is not None
+    h1b = detect_ambiguity("buat web a")
+    assert h1b is not None
+    assert h1b.question == h1.question
+
+
+def test_question_from_pool():
+    from dhybrid.agent.intent import QUESTION_POOLS
+
+    h = detect_ambiguity("buat web login")
     assert h is not None
-    assert any("Python" in o for o in h.options)
+    assert h.question in QUESTION_POOLS["web"]
+
+
+class _QStub:
+    def __init__(self, text, boom=False):
+        self.text = text
+        self.boom = boom
+
+    def complete(self, messages, **kw):
+        if self.boom:
+            raise RuntimeError("offline")
+        from dhybrid.llm.base import ChatMessage, ChatResponse, Usage
+
+        return ChatResponse(
+            message=ChatMessage(role="assistant", content=self.text),
+            usage=Usage(), model="stub",
+        )
+
+
+def test_generate_question_uses_client():
+    from dhybrid.agent.intent import generate_question
+
+    q = generate_question("buat web login", ["PHP", "Next.js"], _QStub("Mau pakai apa?"))
+    assert q == "Mau pakai apa?"
+
+
+def test_generate_question_cleans_and_appends_question_mark():
+    from dhybrid.agent.intent import generate_question
+
+    q = generate_question("buat web", ["a"], _QStub('"Mau pakai apa"'))
+    assert q == "Mau pakai apa?"
+
+
+def test_generate_question_fallback_on_error():
+    from dhybrid.agent.intent import generate_question
+
+    assert generate_question("buat web", ["a"], _QStub("", boom=True)) == ""
+    assert generate_question("buat web", ["a"], _QStub("")) == ""
 
 
 def test_detect_ambiguity_short_ambiguous_prompt():

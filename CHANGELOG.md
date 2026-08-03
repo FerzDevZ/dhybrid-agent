@@ -4,6 +4,17 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.8.1] - 2026-08-03
+
+### Pertanyaan clarify digenerate AI — natural & selalu bervariasi
+
+Pertanyaan clarify bukan lagi template statis: sekarang **digenerate LLM**
+(satu kalimat pendek, hemat token) sehingga terasa alami dan berbeda tiap
+prompt. Saat model gagal/offline → fallback ke **template pool lokal** yang
+diputar deterministik per prompt (crc32) + disesuaikan kategori task
+(web/cli/mobile). Matikan AI via `clarify.ai: false` (template pool tetap
+bervariasi).
+
 ## [0.8.0] - 2026-08-03
 
 ### Auto-skill wajib + Clarify cerdas — agent jadi "super powerfull"
