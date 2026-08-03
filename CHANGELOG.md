@@ -4,6 +4,17 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2026-08-03
+
+### Bugfix UI/UX
+- **Prompt REPL bocor escape code** (`^[[32mdhybrid> ^[[0m` tampil literal):
+  prompt_toolkit tidak menerima string ber-ANSI dari `style()` — dirender
+  sebagai notasi `^[` di terminal. Sekarang pakai FormattedText
+  `[("ansigreen", "dhybrid> ")]`. Terverifikasi via smoke PTY nyata.
+- **`style()` hormati `NO_COLOR`** (standar no-color.org): kalau env
+  `NO_COLOR` diset, output teks polos walau di TTY. +3 unit test
+  (tests/unit/test_render.py).
+
 ## [0.5.2] - 2026-08-03
 
 ### Dev tooling (Tier 3 — kualitas pengembangan)

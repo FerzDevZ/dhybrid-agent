@@ -190,7 +190,9 @@ def repl_loop(ctx) -> int:
             pt_session.completer = FuzzyCompleter(
                 WordCompleter(sorted(set(words)), ignore_case=True)
             )
-            return pt_session.prompt(style("dhybrid> ", "32")).strip()
+            # prompt_toolkit TIDAK menerima string ber-ANSI (dirender literal
+            # jadi "^[[32m..."); pakai FormattedText dengan nama warna ANSI.
+            return pt_session.prompt([("ansigreen", "dhybrid> ")]).strip()
         return input(style("dhybrid> ", "32")).strip()
 
     try:
