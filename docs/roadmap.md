@@ -3,7 +3,8 @@
 ## v0.5.1 (rilis ini)
 - [x] Tier 1 paket pendukung: read_document (markitdown), REPL prompt_toolkit,
       web_fetch trafilatura, skill matching rapidfuzz
-- [ ] Tier 2: ollama (model lokal), sqlite-vec (project memory), tree-sitter (AST)
+- [ ] Tier 2: sqlite-vec (project memory), tree-sitter (AST) — model lokal
+      (ollama) DICORET permanen: user tidak mau, khawatir laptop lemah
 - [ ] Tier 3: pytest-cov + xdist, pip-audit + bandit, pre-commit, uv
 
 ## v0.5.0 (rilis ini)
@@ -63,7 +64,8 @@
 
 ## v0.3.0 — jangkauan
 - [ ] Gateway multi-channel (Telegram/WhatsApp)
-- [ ] Dukungan model lokal (adaptor ~30 baris)
+- [x] ~~Dukungan model lokal (adaptor ~30 baris)~~ — DIBATALKAN (preferensi user:
+      tidak mau mode lokal; khawatir laptop tidak kuat menjalankannya)
 - [ ] Release binary otomatis di GitHub Actions
 
 ## Prinsip yang tidak akan berubah
