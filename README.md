@@ -12,7 +12,8 @@ Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first
 - **12 teknik hemat token** — lazy policies, context compaction, prompt caching (Anthropic cache_control), tool output cap, diff-based edit, semantic cache, early-stop, dsb.
 - **Multi-provider cloud** — OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek, byNara (satu adaptor OpenAI-compatible + adaptor Anthropic native), plus route gratis opencode-zen & byNara.
 - **Tool lengkap** — terminal (dengan gerbang keamanan), read/write range, apply_patch diff-minimal, grep/find, git (commit aman), pytest runner, TDD status, todo, memory jangka panjang (FTS5), subagent delegation.
-- **Sesi & memori** — SQLite local di `~/.dhybrid/`, resume sesi via ringkasan, dashboard token & biaya. `dhybrid repl` otomatis meneruskan sesi terakhir di proyek yang sama (konteks & judul dimuat ulang, tidak mulai kosong); fakta memori jangka panjang proyek jalan di-inject ke awal sesi.
+- **Tidak berhenti prematur saat membangun** — agent menolak melabeli "DONE" bila target membangun masih bertanya/menawarkan pilihan; otomatis naik ke model lebih kuat (escalation chain) atau disodorkan default lalu lanjut, dan tidak berhenti sebelum ada bukti nyata. Bukti penyelesaian dihitung dari file yang benar-benar dibuat (folder dependensi seperti `vendor/`, `node_modules/` diabaikan supaya angkanya akurat — bukan puluhan ribu file palsu).
+- **Sesi & memori** — SQLite local di `~/.dhybrid/`, resume sesi via ringkasan, dashboard token & biaya. `dhybrid repl` otomatis meneruskan sesi terakhir di proyek yang sama: `cwd` dinormalisasi (relatif vs absolut dianggap proyek sama), konteks & judul sesi lama dimuat ulang dan ditampilkan di banner (tanpa baris sesi 'yatim'); fakta memori jangka panjang yang **relevan dengan proyek/cwd** di-inject ke awal sesi (bukan sekadar 'yang terbaru').
 - **Skills** — folder `skills/<nama>/SKILL.md`, auto-inject berdasar relevansi.
 
 ## Install
