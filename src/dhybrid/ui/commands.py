@@ -68,6 +68,7 @@ MENU LENGKAP — pilih dengan prefix / :
   📂 /clear              reset konteks percakapan
   📂 /sessions           daftar sesi sebelumnya
   🧠 /skills             daftar skill yang tersedia
+  🎯 /skill <nama>       paksa pakai skill tertentu tiap prompt (off = kembali otomatis)
   💾 /remember <k> <v>  simpan fakta jangka panjang
   🗑️  /forget <k>        hapus fakta memorip
   📜 /memories          lihat fakta terbaru
@@ -293,6 +294,8 @@ def handle_command(cmd: str, ctx) -> bool:
             print(f"  {s['id']}  {s['created'][:16]}  {s['title']}")
     elif name == "/skills":
         _skills_cmd(ctx, arg)
+    elif name == "/skill":
+        _skill_cmd(ctx, arg)
     elif name in ("/remember", "/rmem"):
         _cmd_remember(ctx, arg)
     elif name in ("/forget", "/fmem"):
@@ -304,6 +307,29 @@ def handle_command(cmd: str, ctx) -> bool:
     else:
         print(style(f"command tidak dikenal: {name} (ketik /help)", "33"))
     return False
+
+
+def _skill_cmd(ctx, arg: str) -> None:
+    """/skill <nama> — paksa inject skill tertentu tiap prompt (untuk sesi ini).
+    /skill off|none|clear — hapus paksaan (kembali otomatis).
+    /skill — tampilkan paksaan aktif."""
+    if not arg.strip():
+        if ctx.forced_skills:
+            print(style("skill paksa aktif: " + ", ".join(ctx.forced_skills), "36"))
+        else:
+            print("(tidak ada skill paksa — otomatis berdasarkan relevansi kata kunci)")
+        return
+    arg = arg.strip().lower()
+    if arg in ("off", "none", "clear", "reset"):
+        ctx.forced_skills = []
+        print(style("OK: paksaan skill dihapus — kembali ke otomatis.", "32"))
+        return
+    if not any(s.name == arg for s in ctx.all_skills):
+        print(style(f"skill '{arg}' tidak dikenal — cek /skills", "31"))
+        return
+    if arg not in ctx.forced_skills:
+        ctx.forced_skills.append(arg)
+    print(style(f"OK: skill '{arg}' DIPAKSA inject tiap prompt (sampai /skill off).", "32"))
 
 
 def _skills_cmd(ctx, arg: str) -> None:

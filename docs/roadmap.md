@@ -1,6 +1,14 @@
 # Roadmap
 
-## v0.4.1 (rilis ini)
+## v0.4.2 (rilis ini)
+- [x] Tool `ask_user` — agent tanya keputusan ke user (max 2x/sesi, non-interaktif diblokir) + golden rule #1 direvisi
+- [x] Paksa skill: `/skill <nama>` + `@nama_skill` di prompt + feedback `[skill aktif: ...]`
+- [x] Matching skill pintar: alias/sinonim ("crash" → debugging), skor berbobot, riwayat sesi, nama skill
+- [x] 5 skill debugging/analisis baru: root-cause, performance, api, sql, concurrency (total 26)
+- [x] Fix allowlist: web_search & http_request aktif di config default
+- [x] Versi sinkron 0.4.2, CI green
+
+## v0.4.1
 - [x] CLI repl + one-shot run + resume
 - [x] Multi-provider cloud (OpenAI/Anthropic/OpenRouter/Gemini/Groq/DeepSeek/byNara)
 - [x] 12 teknik hemat token + metering

@@ -31,9 +31,10 @@ BUILD_VERBS = ("buat", "buatkan", "bikin", "buatin", "tambahkan", "create", "mak
 MUTATING_TOOLS = {"apply_patch", "write_file", "git_commit"}
 MAX_NUDGES = 2
 NUDGE_MSG = (
-    "[instruksi sistem dari user] Jangan bertanya — user meminta DIBUATKAN. "
+    "[instruksi sistem dari user] Jangan bertanya lewat teks — user meminta DIBUATKAN. "
     "Pilih stack default yang toolnya tersedia di sistem (cek: which php composer node npm python3), "
-    "LANGSUNG buat file + verifikasi, lalu laporkan. Kerjakan sekarang, jangan tanya dulu."
+    "LANGSUNG buat file + verifikasi, lalu laporkan. Kalau keputusan user benar-benar diperlukan, "
+    "pakai tool ask_user (bukan tanya teks); kalau bisa ditebak, pilih default dan eksekusi sekarang."
 )
 SILENT_MSG = (
     "[instruksi sistem] Kamu sudah memakai tool tetapi belum memberi jawaban. "
@@ -112,6 +113,7 @@ class LoopResult:
     escalated_quality: bool = False     # pernah naik model karena skor rendah
     escalation_count: int = 0           # berapa kali naik model akibat quality rendah
     critiqued: bool = False             # pernah self-critique
+    pending_question: dict | None = None  # tool ask_user: tunggu jawaban user di REPL
 
 
 class AgentLoop:
@@ -127,6 +129,7 @@ class AgentLoop:
         hooks: Hooks | None = None,
         cwd: str = ".",
         client_factory=None,  # callable: preset_name -> LLMClient, untuk escalation chain
+        ask_state=None,       # AskState dari tool ask_user (None = tanpa tanya-user)
     ):
         self.router = client_or_router if hasattr(client_or_router, "route") else None
         self.client: LLMClient | None = None if self.router else client_or_router
@@ -136,6 +139,7 @@ class AgentLoop:
         self.cfg = cfg or LoopConfig()
         self.hooks = hooks or Hooks()
         self.cwd = cwd
+        self.ask_state = ask_state
         self.tool_events: list[dict] = []  # jejak tool (untuk verifier & skor)
         self._client_factory = client_factory
         self._esc_idx = 0  # posisi di escalation_chain (0 = model awal)
@@ -239,6 +243,22 @@ class AgentLoop:
             )
             return after
         return last_snapshot
+
+    def _maybe_pause_for_user(self, result: LoopResult, last_text: str) -> bool:
+        """Tool ask_user dipanggil → hentikan loop, serahkan pertanyaan ke REPL.
+
+        Return True bila loop harus berhenti (jawaban user akan diteruskan oleh REPL
+        sebagai pesan user baru, lalu run_agent dipanggil ulang).
+        """
+        if self.ask_state is None or not self.ask_state.pending:
+            return False
+        result.pending_question = self.ask_state.pending
+        self.ask_state.pending = None
+        result.final_text = (
+            (last_text or "").strip() or "Pertanyaan diajukan ke user — menunggu jawaban."
+        )
+        self.hooks.finish(result)
+        return True
 
     def _finalize_response(self, last_text: str, result: LoopResult) -> str:
         """Bersihkan markup tool & pastikan jawaban final TIDAK kosong.
@@ -522,6 +542,10 @@ class AgentLoop:
                     self.ctx.push(
                         ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
                     )
+
+            # 4b) ask_user dipanggil → hentikan loop, REPL akan tanya user & lanjut
+            if self._maybe_pause_for_user(result, last_text):
+                return result
 
             # 5) eskalasi cheap-first: model kecil gagal → model besar
             if (

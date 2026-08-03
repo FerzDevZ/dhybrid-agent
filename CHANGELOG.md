@@ -4,6 +4,26 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.4.2] - 2026-08-03
+
+### Ditambahkan
+- Tool `ask_user(prompt, options)` — agent boleh tanya keputusan ke user di
+  tengah loop; guardrail: maks 2x/sesi, diblokir di mode non-interaktif
+  (`dhybrid run` — agent harus pilih default sendiri). Golden rule #1 direvisi:
+  "eksekusi dulu; tanya hanya via ask_user bila pilihan berdampak besar".
+- Paksa skill: `/skill <nama>` (berlaku tiap prompt) dan `@nama_skill` di prompt;
+  feedback `[skill aktif: ...]` ditampilkan setelah tiap prompt.
+- Matching skill lebih pintar: sinonim/alias ("crash" → debugging), skor
+  berbobot (kata langka lebih kuat), cocok dengan riwayat sesi, nama skill
+  ikut dihitung.
+- 5 skill debugging/analisis baru: root-cause-analysis, performance-profiling,
+  api-debugging, sql-query-optimization, concurrency-debugging (total 26).
+- Fix: `web_search` & `http_request` ternyata tidak ada di default allowlist
+  config — sekarang aktif.
+
+### Diperbaiki
+- Import tak terpakai + urutan import (ruff bersih).
+
 ## [0.4.1] - 2026-08-03
 
 ### Ditambahkan

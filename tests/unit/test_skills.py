@@ -71,6 +71,130 @@ def test_short_args_hides_content(tmp_path):
     assert len(out) < 80
 
 
+DEBUG_SKILL = """---
+name: debugging
+description: Debug error traceback, sistematis, cari akar masalah, jangan menebak
+---
+
+Debugging sistematis.
+"""
+
+
+def _skills_with(tmp_path, *skill_texts):
+    from dhybrid.skills.loader import list_skills
+
+    d = tmp_path / "skills"
+    for i, text in enumerate(skill_texts):
+        (d / f"sk{i}").mkdir(parents=True)
+        (d / f"sk{i}" / "SKILL.md").write_text(text)
+    return list_skills(d)
+
+
+def test_alias_expansion_matches_debugging(tmp_path):
+    """'program saya crash' (tanpa kata 'debug') tetap mencocokkan skill debugging."""
+    from dhybrid.skills.loader import select_skills
+
+    skills = _skills_with(tmp_path, DEBUG_SKILL, TDD_SKILL)
+    names = select_skills("kenapa program saya crash terus", skills)
+    assert "debugging" in names
+    assert "tdd" not in names
+
+
+def test_name_match_and_weighted_rare_word(tmp_path):
+    """Menyebut nama skill di prompt langsung cocok; kata langka berbobot lebih."""
+    from dhybrid.skills.loader import select_skills
+
+    skills = _skills_with(tmp_path, TDD_SKILL)
+    names = select_skills("pakai skill tdd untuk fitur ini", skills)
+    assert names == ["tdd"]
+
+
+def test_history_matching(tmp_path):
+    """Skill cocok dari riwayat sesi: 'database' di awal → tetap relevan."""
+    from dhybrid.skills.loader import select_skills
+
+    db_skill = """---
+name: database-query
+description: Query SQL, index, explain, join, optimasi database
+---
+
+SQL.
+"""
+    skills = _skills_with(tmp_path, db_skill)
+    # prompt sekarang tidak menyebut database, tapi riwayat menyebutnya
+    names = select_skills("lanjutkan", skills, history="tadi kita bahas query database postgres")
+    assert "database-query" in names
+    # tanpa riwayat → tidak cocok
+    assert select_skills("lanjutkan", skills) == []
+
+
+def test_force_inject_even_without_match(tmp_path):
+    """force (dari /skill atau @nama) tetap di-inject walau tanpa kata kunci cocok."""
+    from dhybrid.skills.loader import inject_skills
+
+    skills = _skills_with(tmp_path, TDD_SKILL)
+    out = inject_skills("hello saja", skills, force=["tdd"])
+    assert "[SKILL: tdd]" in out
+
+
+def test_extract_skill_mentions():
+    from dhybrid.skills.loader import extract_skill_mentions
+
+    clean, found = extract_skill_mentions(
+        "cek @debugging dan @Code-Review ini", {"debugging", "code-review"}
+    )
+    assert found == ["debugging", "code-review"]
+    assert "debugging" not in clean and "Code-Review" not in clean
+    # @ tidak dikenal → dibiarkan (bisa username GitHub)
+    clean2, found2 = extract_skill_mentions("@github-user halo", {"debugging"})
+    assert found2 == [] and "@github-user" in clean2
+
+
+def test_select_skills_forced_first():
+    from pathlib import Path
+
+    from dhybrid.skills.loader import Skill, select_skills
+
+    skills = [
+        Skill("tdd", "TDD test-driven development", "TDD body", Path("x")),
+        Skill("debugging", "Debug error traceback", "Debug body", Path("y")),
+    ]
+    names = select_skills("ada error di kode", skills, force=["tdd"])
+    assert names[0] == "tdd"  # paksa didahulukan
+    assert "debugging" in names  # relevan tetap ikut
+
+
+def test_ask_user_non_interactive_blocked():
+    from dhybrid.tools.ask import BLOCKED_SENTINEL, AskState, register
+    from dhybrid.tools.registry import ToolRegistry
+
+    state = AskState(interactive=False)
+    reg = ToolRegistry()
+    register(reg, state)
+    out = reg.execute("ask_user", {"prompt": "pilih apa?"})
+    assert out.startswith(BLOCKED_SENTINEL)
+    assert state.pending is None  # tidak ada pertanyaan menggantung
+
+
+def test_ask_user_pending_and_count_guard():
+    from dhybrid.tools.ask import ASK_MAX, PENDING_SENTINEL, AskState, register
+    from dhybrid.tools.registry import ToolRegistry
+
+    state = AskState(interactive=True)
+    reg = ToolRegistry()
+    register(reg, state)
+    for _ in range(ASK_MAX):
+        out = reg.execute("ask_user", {"prompt": "q", "options": ["a", "b"]})
+        assert out == PENDING_SENTINEL
+        assert state.pending == {"prompt": "q", "options": ["a", "b"]}
+        state.pending = None  # REPL mengambil & membersihkan
+    # ke-3 diblokir → agent harus putuskan sendiri
+    out = reg.execute("ask_user", {"prompt": "q lagi"})
+    assert "BLOCKED" in out
+    assert state.pending is None
+    assert state.count == ASK_MAX
+
+
 def test_slugify_fallback_generic():
     from dhybrid.skills.loader import slugify
 

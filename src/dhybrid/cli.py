@@ -15,26 +15,27 @@ from dhybrid.ui.render import style
 from dhybrid.ui.repl import repl_loop, run_agent
 
 
-def _build_context(args, resume: bool = False, sid: str | None = None) -> SessionContext:
+def _build_context(args, resume: bool = False, sid: str | None = None, interactive: bool = True) -> SessionContext:
     cfg = Config.load(Path(args.config) if args.config else None)
     store = SessionStore(cfg.workspace / "sessions.sqlite")
     # normalisasi cwd (absolut + resolve symlink) supaya auto-resume konsisten
     # antar pemanggilan: `dhybrid repl` (cwd=".") dan `dhybrid --cwd /x/repl`
     # dari folder yg sama harus dianggap proyek yang sama.
     cwd = str(Path(args.cwd or ".").expanduser().resolve())
-    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False), resume=resume, sid=sid)
+    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False), resume=resume, sid=sid, interactive=interactive)
     if getattr(args, "model", None):
         ctx.set_model(args.model)
     return ctx
 
 
 def cmd_repl(args) -> int:
-    ctx = _build_context(args, resume=not getattr(args, "fresh", False))
+    ctx = _build_context(args, resume=not getattr(args, "fresh", False), interactive=True)
     return repl_loop(ctx)
 
 
 def cmd_run(args) -> int:
-    ctx = _build_context(args)
+    # one-shot: non-interaktif — tool ask_user diblokir, agent pilih default sendiri
+    ctx = _build_context(args, interactive=False)
     print(f"dhybrid: {ctx.current_model_label()}")
     result = run_agent(ctx, args.prompt)
     print()

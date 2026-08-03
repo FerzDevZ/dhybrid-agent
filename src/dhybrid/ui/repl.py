@@ -7,7 +7,7 @@ import os
 from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
-from dhybrid.skills.loader import inject_skills
+from dhybrid.skills.loader import extract_skill_mentions, inject_skills, select_skills
 from dhybrid.ui.commands import handle_command
 from dhybrid.ui.render import stream_print, style
 from dhybrid.ui.status import (
@@ -54,11 +54,13 @@ def run_agent(ctx, prompt: str) -> LoopResult:
         hooks=ctx.hooks,
         cwd=ctx.cwd,
         client_factory=_client_factory if chain else None,
+        ask_state=ctx.ask_state,
     )
     result = loop.run(prompt, ctx.system_prompt)
 
-    # simpan ke sesi
-    ctx.store.append_message(ctx.sid, "user", prompt[:2000])
+    # simpan ke sesi (prompt kosong = kelanjutan jawaban user, tidak disimpan ganda)
+    if prompt.strip():
+        ctx.store.append_message(ctx.sid, "user", prompt[:2000])
     ctx.store.append_message(ctx.sid, "assistant", result.final_text[:4000])
     ctx.store.set_summary(
         ctx.sid,
@@ -113,6 +115,7 @@ def show_welcome(ctx) -> None:
     print("  💰 /tokens              dashboard token & biaya               /compact             ringkas konteks")
     print("  📂 /sessions            sesi sebelumnya                       /clear               reset percakapan")
     print("  🧠 /skills              lihat & hidup/matikan skill           /help                semua perintah")
+    print("  🎯 /skill <nama>        paksa pakai skill (off = otomatis)    @nama_skill di prompt juga bisa")
     print("  🚪 /quit                keluar")
     print()
     print(style("  Tips: tanpa API key pun bisa dipakai — route opencode zen gratis sudah jadi default.", "90"))
@@ -189,6 +192,20 @@ def repl_loop(ctx) -> int:
                 pass
 
 
+def _recent_user_history(ctx, n: int = 3) -> str:
+    """Pesan user asli terakhir (tanpa injeksi sistem) untuk cocokkan skill.
+
+    Supaya skill tetap relevan di percakapan panjang: user bilang "database"
+    di awal, lalu "buatkan CRUD" — skill database tetap ikut ter-inject.
+    """
+    msgs = [
+        m.content or ""
+        for m in ctx.ctx.messages
+        if m.role == "user" and not (m.content or "").lstrip().startswith("[")
+    ]
+    return "\n".join(m[:500] for m in msgs[-n:])
+
+
 def _run_one(ctx, raw: str) -> None:
     # judul sesi dari prompt pertama
     if ctx.store.get_session(ctx.sid) and not ctx.store.get_session(ctx.sid)["title"].startswith("untitled"):
@@ -199,11 +216,24 @@ def _run_one(ctx, raw: str) -> None:
         )
         ctx.store.conn.commit()
 
+    max_inject = ctx.cfg.skills.get("max_inject", 3)
+    # @nama_skill di prompt = paksa skill itu; /skill <nama> = paksa untuk sesi.
+    # Riwayat sesi ikut dicocokkan supaya skill tetap relevan di percakapan panjang.
+    clean_raw, mentions = extract_skill_mentions(raw, {s.name for s in ctx.skills})
+    force = mentions or (ctx.forced_skills or None)
+    history = _recent_user_history(ctx)
+    selected = select_skills(clean_raw, ctx.skills, history=history, force=force)
     prompt = inject_skills(
-        raw, ctx.skills,
-        max_inject=ctx.cfg.skills.get("max_inject", 3),
+        clean_raw, ctx.skills,
+        max_inject=max_inject,
         max_chars=ctx.cfg.skills.get("max_chars", 800),
+        history=history,
+        force=force,
     )
+    if selected:
+        shown = selected[:max_inject]
+        tag = "paksa" if (mentions or ctx.forced_skills) else "aktif"
+        print(style(f"[skill {tag}: {', '.join(shown)}]", "90"))
     ctx.steps = 0
     ctx.last_cost = 0.0
     print()  # baris baru sebelum streaming
@@ -220,6 +250,26 @@ def _run_one(ctx, raw: str) -> None:
     ctx.hooks.on_delta = _counting_delta
     try:
         result = run_agent(ctx, prompt)
+        # tool ask_user dipanggil agent → tanya user, teruskan jawaban, lanjutkan
+        while result.pending_question:
+            pq = result.pending_question
+            print(style("\n❓ " + str(pq.get("prompt", "?")), "1;36"))
+            opts = pq.get("options") or []
+            if opts:
+                for i, o in enumerate(opts, 1):
+                    print(f"   {i}. {o}")
+                print("   (ketik nomor atau jawaban bebas — kosong = pilihan 1)")
+            try:
+                answer = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                answer = ""
+            if not answer and opts:
+                answer = opts[0]
+            elif answer.isdigit() and opts:
+                i = int(answer)
+                if 1 <= i <= len(opts):
+                    answer = opts[i - 1]
+            result = run_agent(ctx, f"[jawaban user] {answer}")
     finally:
         ctx.hooks.on_delta = orig_delta
     final = result.final_text

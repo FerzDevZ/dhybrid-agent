@@ -75,6 +75,77 @@ def test_loop_early_stop_signal():
     assert res.stopped_early
 
 
+class _AskClient(LLMClient):
+    """Call 1: panggil tool ask_user; call berikutnya: jawaban teks."""
+
+    def __init__(self, name="askfake"):
+        self.name = name
+        self.calls = 0
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        if self.calls == 1:
+            yield StreamEvent(kind="tool_call", tool_call={
+                "id": "t1",
+                "name": "ask_user",
+                "arguments": {"prompt": "pakai Django atau Flask?", "options": ["Django", "Flask"]},
+            })
+        else:
+            yield StreamEvent(kind="delta", text="selesai")
+        yield StreamEvent(kind="done", usage=Usage(prompt_tokens=10, completion_tokens=5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model=self.name)
+
+    def model_name(self):
+        return self.name
+
+
+def _ask_tools(state):
+    from dhybrid.tools.ask import register as register_ask
+
+    reg = ToolRegistry()
+    register_ask(reg, state)
+    return reg
+
+
+def test_loop_pauses_for_ask_user():
+    from dhybrid.tools.ask import AskState
+
+    state = AskState(interactive=True)
+    loop = AgentLoop(
+        _AskClient(),
+        _ask_tools(state),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        ask_state=state,
+    )
+    res = loop.run("buat web app", "sys")
+    assert res.pending_question == {
+        "prompt": "pakai Django atau Flask?",
+        "options": ["Django", "Flask"],
+    }
+    assert state.pending is None  # pertanyaan sudah diambil loop untuk REPL
+
+
+def test_loop_ask_user_blocked_non_interactive():
+    from dhybrid.tools.ask import AskState
+
+    state = AskState(interactive=False)
+    loop = AgentLoop(
+        _AskClient(),
+        _ask_tools(state),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        ask_state=state,
+    )
+    res = loop.run("buat web app", "sys")
+    assert res.pending_question is None  # tidak pause — agent lanjut sendiri
+    assert state.pending is None
+
+
 def test_loop_budget_hard_stop():
     loop = AgentLoop(
         ScriptedClient(["tool:grep:x", "tool:grep:x", "tool:grep:x"]),

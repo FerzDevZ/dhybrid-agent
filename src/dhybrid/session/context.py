@@ -23,9 +23,11 @@ from dhybrid.ui.commands import PROVIDERS, _load_provider_enabled
 BASE_PROMPT = (
     "Kamu adalah dhybrid-agent, coding agent CLI yang POWERFUL — agresif eksekusi, hemat token. "
     "TUJUH PATOKAN EMAS (IKUTI SELALU ATAS SEGALA HAL):\n"
-    "1. JIKA USER MEMINTA SESUAT → EKSEKUSI SEKARANG. Jangan tanya stack/mode/klarifikasi.\n"
-    "   Cek tool sistem dulu (which php composer node npm python3). Pilih stack DEFAULT yang tersedia. "
-    "Langsung buat file + verifikasi + lapor. Jangan tanya dulu.\n"
+    "1. JIKA USER MEMINTA SESUAT → EKSEKUSI SEKARANG dengan stack default yang tersedia "
+    "(cek dulu: which php composer node npm python3). Jangan tanya dulu lewat teks. "
+    "Tanya user HANYA via tool ask_user, dan HANYA bila pilihan berdampak besar & tak bisa ditebak "
+    "(maks 2x per sesi). Kalau bisa ditebak → pilih default dan lanjutkan. "
+    "Langsung buat file + verifikasi + lapor.\n"
     "2. Selalu pakai tool untuk eksplor (read_file kecil, grep) sebelum mengedit.\n"
     "3. Setelah pakai tool → beri jawaban akhir yang jelas, ringkas. Jangan diam.\n"
     "4. KODE TERBAIK = KODE YANG TIDAK DITULIS. Jangan refactor tanpa diminta.\n"
@@ -55,6 +57,7 @@ class SessionContext:
         sid: str | None = None,
         yes_mode: bool = False,
         resume: bool = False,
+        interactive: bool = True,
     ):
         self.cfg = cfg
         self.store = store
@@ -93,10 +96,15 @@ class SessionContext:
         self._cost_map: dict[str, ModelConfig] = self._build_cost_map()
 
         # tools + subagent factory
+        from dhybrid.tools.ask import AskState
+
+        self.ask_state = AskState(interactive=interactive)
+        self.forced_skills: list[str] = []  # /skill <nama> — paksa inject tiap prompt
         self.tools: ToolRegistry = build_tools(
             cfg,
             client_factory=self._fresh_client,
             memory_store=self.memory,
+            ask_state=self.ask_state,
         )
 
         self.router: HybridRouter | None = self._build_router()

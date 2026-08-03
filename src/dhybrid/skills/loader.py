@@ -17,6 +17,51 @@ STOPWORDS = {
     "menggunakan", "dll", "dst", "aja", "saja",
 }
 
+# Sinonim/kata pemicu: prompt yang tidak menyebut kata persis di deskripsi skill
+# tetap bisa mencocokkan. Contoh: "program saya crash" → konsep debugging.
+ALIAS_EXPANSIONS = {
+    # debugging & analisis error
+    "debug": {"error", "traceback", "bug", "crash", "gagal", "exception"},
+    "debugging": {"debug", "error", "traceback", "bug"},
+    "error": {"debug", "traceback", "crash", "exception", "gagal", "bug"},
+    "crash": {"debug", "error", "exception", "gagal", "mati", "rusak"},
+    "traceback": {"debug", "error", "stack"},
+    "exception": {"debug", "error", "crash"},
+    "bug": {"debug", "error", "perbaiki", "fix", "rusak"},
+    "gagal": {"debug", "error", "crash", "fail"},
+    "kenapa": {"penyebab", "sebab", "cause", "akar", "masalah"},
+    "rusak": {"error", "crash", "gagal", "debug", "bug"},
+    "mati": {"crash", "gagal", "error", "debug"},
+    # review / keamanan
+    "review": {"kode", "kualitas", "bug", "keamanan", "quality"},
+    "keamanan": {"security", "vulnerability", "aman", "exploit", "injection"},
+    "security": {"keamanan", "vulnerability", "exploit", "injection"},
+    "vulnerability": {"keamanan", "security", "exploit"},
+    # kinerja
+    "lambat": {"slow", "kinerja", "perf", "optimasi", "bottleneck"},
+    "slow": {"lambat", "kinerja", "perf", "optimasi", "bottleneck"},
+    "optimasi": {"optimize", "perf", "lambat", "kinerja", "bottleneck"},
+    "kinerja": {"perf", "lambat", "slow", "optimasi"},
+    # testing
+    "test": {"testing", "pytest", "tdd", "unit"},
+    "testing": {"test", "pytest", "tdd"},
+    "pytest": {"test", "testing", "tdd"},
+    # web & api
+    "api": {"http", "rest", "endpoint", "request", "curl"},
+    "http": {"api", "request", "endpoint", "curl", "rest"},
+    "request": {"api", "http", "endpoint"},
+    "cari": {"search", "internet", "web", "google"},
+    "search": {"cari", "internet", "web"},
+    # database
+    "database": {"sql", "query", "db", "mysql", "postgres", "sqlite"},
+    "sql": {"database", "query", "db", "mysql", "postgres"},
+    "query": {"sql", "database", "db"},
+    # memory
+    "ingat": {"remember", "memory", "fakta"},
+    "lupa": {"forget", "memory"},
+    "memory": {"ingat", "remember", "fakta"},
+}
+
 
 @dataclass
 class Skill:
@@ -65,6 +110,85 @@ def list_skills(skills_dir: str | Path) -> list[Skill]:
 
 def _keywords(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9_]{3,}", text.lower()))
+
+
+def _kw_weighted_intersection(a: set[str], b: set[str]) -> int:
+    """Kata langka (>= 6 huruf) berbobot 2 — sinyal lebih kuat daripada kata umum."""
+    return sum(2 if len(k) >= 6 else 1 for k in a & b)
+
+
+def _expand_aliases(kws: set[str]) -> set[str]:
+    """Perluas kata kunci prompt lewat peta sinonim (crash → debug/error/...)."""
+    out: set[str] = set()
+    for k in kws:
+        out |= ALIAS_EXPANSIONS.get(k, set())
+    return out
+
+
+def score_skill(sk: Skill, prompt_kw: set[str], history_kw: set[str] | None = None) -> int:
+    """Skor relevansi skill terhadap prompt (dan riwayat sesi).
+
+    - cocok kata kunci di prompt: ×2 (prompt adalah sinyal terkuat)
+    - cocok kata kunci di riwayat sesi: ×1 (konteks percakapan)
+    - cocok sinonim/alias prompt: ×2 (mis. 'crash' → konsep debugging)
+    - nama skill ikut dihitung (user bisa mengetik 'pakai skill tdd')
+    """
+    dk = _keywords(sk.description) | _keywords(sk.name)
+    score = 2 * _kw_weighted_intersection(dk, prompt_kw)
+    if history_kw:
+        score += _kw_weighted_intersection(dk, history_kw)
+    score += 2 * _kw_weighted_intersection(dk, _expand_aliases(prompt_kw))
+    return score
+
+
+def select_skills(
+    prompt: str,
+    skills: list[Skill],
+    history: str = "",
+    force: list[str] | None = None,
+    min_score: int = 1,
+) -> list[str]:
+    """Pilih skill relevan (urut skor turun); `force` selalu didahulukan.
+
+    Return daftar nama skill yang LAYAK di-inject (belum dipotong max_inject).
+    """
+    pk = _keywords(prompt)
+    hk = _keywords(history) if history else None
+    forced = [f.lower() for f in (force or [])]
+    by_name = {s.name: s for s in skills}
+
+    forced_hits = [n for n in forced if n in by_name]
+    rest: list[tuple[int, Skill]] = []
+    for sk in skills:
+        if sk.name in forced_hits:
+            continue
+        sc = score_skill(sk, pk, hk)
+        if sc >= min_score:
+            rest.append((sc, sk))
+    rest.sort(key=lambda x: -x[0])
+    ordered = [by_name[n] for n in forced_hits] + [s for _, s in rest]
+    return [s.name for s in ordered]
+
+
+MENTION_RE = re.compile(r"@([a-z0-9][a-z0-9_-]*)", re.IGNORECASE)
+
+
+def extract_skill_mentions(prompt: str, known: set[str]) -> tuple[str, list[str]]:
+    """`@nama_skill` di prompt → (prompt bersih, daftar skill valid).
+
+    Mention yang dikenal DIBUANG dari prompt (kontrol user, bukan teks model);
+    @ yang tidak dikenal dibiarkan (bisa jadi username GitHub dll).
+    """
+    found: list[str] = []
+
+    def _sub(m: re.Match) -> str:
+        name = m.group(1).lower()
+        if name in known:
+            found.append(name)
+            return ""
+        return m.group(0)
+
+    return MENTION_RE.sub(_sub, prompt), found
 
 
 def build_skill_md(name: str, description: str, goal: str, tools_used: list[str], result: str, steps: str | None = None) -> str:
@@ -117,21 +241,22 @@ def inject_skills(
     skills: list[Skill],
     max_inject: int = 3,
     max_chars: int = 800,
+    history: str = "",
+    force: list[str] | None = None,
 ) -> str:
-    """Tambahkan body skill yang relevan ke prompt (prefix)."""
-    pk = _keywords(prompt)
-    scored = []
-    for sk in skills:
-        if not sk.description:
-            continue
-        score = len(_keywords(sk.description) & pk)
-        if score >= 1:
-            scored.append((score, sk))
-    scored.sort(key=lambda x: -x[0])
+    """Tambahkan body skill yang relevan ke prompt (prefix).
+
+    - relevansi: kata kunci prompt + riwayat sesi + sinonim (lihat select_skills)
+    - `force`: nama skill yang WAJIB di-inject (didahulukan, dipakai /skill & @nama)
+    """
+    names = select_skills(prompt, skills, history=history, force=force)
+    by_name = {s.name: s for s in skills}
     parts = []
-    for _, sk in scored[:max_inject]:
-        body = sk.body[:max_chars]
-        parts.append(f"[SKILL: {sk.name}]\n{body}")
+    for n in names[:max_inject]:
+        sk = by_name.get(n)
+        if sk is None:
+            continue
+        parts.append(f"[SKILL: {sk.name}]\n{sk.body[:max_chars]}")
     if not parts:
         return prompt
     return "\n\n".join(parts) + "\n\n---\n\n" + prompt

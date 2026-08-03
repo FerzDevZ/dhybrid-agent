@@ -14,9 +14,11 @@ def run_cli(*args, timeout=60, env=None):
 
 
 def test_version():
+    from dhybrid import __version__
+
     p = run_cli("--version")
     assert p.returncode == 0
-    assert "0.4.1" in p.stdout
+    assert __version__ in p.stdout
 
 
 def test_pyproject_version_matches_runtime():
