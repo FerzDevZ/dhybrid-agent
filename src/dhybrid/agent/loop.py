@@ -27,14 +27,20 @@ from dhybrid.efficiency.lazy import needs_change_check
 from dhybrid.llm.base import ChatMessage, ChatResponse, LLMClient, Usage
 from dhybrid.tools.registry import ToolRegistry
 
-BUILD_VERBS = ("buat", "buatkan", "bikin", "buatin", "tambahkan", "create", "make", "implement", "bangun")
+BUILD_VERBS = (
+    "buat", "buatkan", "bikin", "buatin", "tambahkan", "tambah", "create", "make",
+    "implement", "implementasikan", "bangun", "kerjakan", "kerjain", "setup",
+    "set-up", "pasang", "install", "scaffold", "generate", "tulis", "tuliskan",
+    "tulisin", "selesaikan", "selesaikin", "perbaiki", "perbaikin", "fix",
+    "refactor", "optimasi", "optimalkan", "hapus", "remove", "delete", "ubah",
+    "modif", "modifikasi", "migrate", "deploy",
+)
 MUTATING_TOOLS = {"apply_patch", "write_file", "git_commit"}
 MAX_NUDGES = 2
-NUDGE_MSG = (
-    "[instruksi sistem dari user] Jangan bertanya lewat teks — user meminta DIBUATKAN. "
-    "Pilih stack default yang toolnya tersedia di sistem (cek: which php composer node npm python3), "
-    "LANGSUNG buat file + verifikasi, lalu laporkan. Kalau keputusan user benar-benar diperlukan, "
-    "pakai tool ask_user (bukan tanya teks); kalau bisa ditebak, pilih default dan eksekusi sekarang."
+EVIDENCE_MSG = (
+    "[instruksi sistem] Kamu mengklaim selesai, TAPI tidak ada bukti perubahan nyata "
+    "(0 file dibuat/diubah, tidak ada write_file/apply_patch/git_commit, tidak ada test dijalankan). "
+    "Kerjakan sekarang sampai ada bukti: buat/ubah file, jalankan test, atau commit — lalu lapor hasilnya."
 )
 SILENT_MSG = (
     "[instruksi sistem] Kamu sudah memakai tool tetapi belum memberi jawaban. "
@@ -63,6 +69,20 @@ def _looks_complete(text: str) -> bool:
 def _is_build_request(prompt: str) -> bool:
     low = prompt.lower()
     return any(v in low for v in BUILD_VERBS)
+
+
+def _is_continuation(prompt: str) -> bool:
+    """Prompt lanjutan ('lanjutkan', 'ya', 'teruskan'...) — konteks membangun
+    diwarisi dari riwayat sesi supaya tidak bebas klaim selesai tanpa bukti.
+    Kata pendek ('ya'/'ok') hanya dianggap lanjutan bila prompt-nya pendek,
+    hindari false positive: "ya" ada di dalam "saya"."""
+    low = prompt.lower().strip()
+    if any(v in low for v in ("lanjutkan", "lanjutin", "lanjut", "teruskan", "continue", "silahkan")):
+        return True
+    words = low.split()
+    return len(words) <= 3 and any(
+        v in low for v in ("ya", "yes", "ok", "oke", "iya", "ayo", "gas", "setuju", "next")
+    )
 
 
 def _is_transient_error(e: Exception) -> bool:
@@ -405,6 +425,16 @@ class AgentLoop:
                 # measure kualitas + bukti nyata (file/test) untuk keputusan
                 v = verify_build(self.cwd, before_files, snapshot_files(self.cwd), self.tool_events)
                 is_build = _is_build_request(user_prompt)
+                # 'lanjutkan'/'ya' dst → warisi konteks membangun dari riwayat sesi,
+                # supaya klaim selesai tanpa bukti tetap ditolak.
+                if not is_build and _is_continuation(user_prompt):
+                    recent = [
+                        m.content or ""
+                        for m in self.ctx.messages[-10:]
+                        if m.role == "user" and not (m.content or "").lstrip().startswith("[")
+                    ]
+                    if any(_is_build_request(u) for u in recent):
+                        is_build = True
                 score = score_output(
                     last_text,
                     is_build=is_build,
@@ -420,7 +450,11 @@ class AgentLoop:
                 asks_qa = _ends_with_question(last_text)
                 repeated_qa = self._is_repeated_question(last_text)
                 says_done = _looks_complete(last_text)
-                evidence = v["files_created"] > 0 or self._used_mutating_tool()
+                evidence = (
+                    v["files_created"] > 0
+                    or v["tests_passed"] is True
+                    or self._used_mutating_tool()
+                )
 
                 if not self.budget.exhausted:
                     # jangan tanya berulang soal yang sudah diajukan
@@ -458,17 +492,17 @@ class AgentLoop:
                         self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
                         continue
 
-                    # 3b) nudge build: diminta buat tapi belum ada perubahan file → jangan selesai
+                    # 3b) nudge build: diminta buat tapi belum ada bukti perubahan → jangan selesai.
+                    # Klaim "selesai/done/berhasil" TANPA bukti tetap ditolak (says_done tidak bypass).
                     if (
                         is_build
                         and not evidence
-                        and not says_done
                         and not result.stopped_early
                         and nudges < self.cfg.max_nudges
                     ):
                         nudges += 1
                         self.ctx.push(
-                            ChatMessage(role="user", content=NUDGE_MSG if asks_qa else EXEC_MSG)
+                            ChatMessage(role="user", content=EVIDENCE_MSG if says_done else EXEC_MSG)
                         )
                         continue
 

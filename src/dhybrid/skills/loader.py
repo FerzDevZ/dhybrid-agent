@@ -221,19 +221,25 @@ def slugify(goal: str) -> str:
 MUTATING_TOOLS = {"apply_patch", "write_file", "git_commit"}
 
 
-def auto_skill_worthwhile(tools_used: list[str], tool_counts: dict[str, int] | None = None, final: str = "") -> bool:
-    """Task nyata = ada perubahan/karya nyata. Sesi tanya-jawab atau eksplorasi
-    (hanya ls/grep/read) TIDAK menghasilkan skill — cegah skill sampah."""
+def auto_skill_worthwhile(
+    tools_used: list[str],
+    tool_counts: dict[str, int] | None = None,
+    final: str = "",
+    files_created: int = 0,
+    tests_passed: bool | None = None,
+) -> bool:
+    """Task nyata = ada KARYA nyata: file dibuat/diubah, test dijalankan, atau
+    tool mutasi dipakai. Sesi tanya-jawab / eksplorasi (hanya ls/grep/read/fetch)
+    TIDAK menghasilkan skill — cegah skill sampah seperti 'lanjutkan', 'hai'."""
     if not tools_used:
         return False
     if not final or final.startswith("[error"):
         return False
-    # ada aksi mengubah file → layak jadi skill
+    if files_created > 0:
+        return True
     if any(t in MUTATING_TOOLS for t in tools_used):
         return True
-    # tanpa aksi ubah: butuh kerja nyata (>= 4 pemakaian tool)
-    counts = tool_counts or {}
-    return sum(counts.get(t, 1) for t in tools_used) >= 4
+    return "run_tests" in tools_used
 
 
 def inject_skills(

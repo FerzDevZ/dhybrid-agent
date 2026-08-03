@@ -4,6 +4,27 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.4.3] - 2026-08-03
+
+### Diperbaiki
+- **"DONE" tanpa kerja nyata** (laporan user): prompt "mulai setup dan kerjakan
+  project login register" tidak dikenali sebagai permintaan membangun karena
+  kata "kerjakan"/"setup" tidak ada di `BUILD_VERBS` → agent bebas klaim
+  selesai tanpa bukti. Sekarang: `BUILD_VERBS` diperluas (kerjakan, setup,
+  install, perbaiki, tulis, hapus, deploy, dll).
+- **"lanjutkan"/"ya" tidak diwarisi konteks membangun** — prompt lanjutan
+  sekarang mewarisi status build dari riwayat sesi, jadi klaim selesai tanpa
+  bukti tetap ditolak.
+- **Klaim "selesai/berhasil/done" tidak lagi mem-bypass nudge** — build tanpa
+  bukti (0 file, tanpa write_file/apply_patch/git_commit/test) di-nudge
+  `EVIDENCE_MSG` sampai `max_nudges`, bukan langsung finalize.
+- **Auto-skill sampah** — guard `auto_skill_worthwhile` bocor: sesi eksplorasi
+  (ls/grep/read/fetch, >= 4 tool) dianggap layak → 21 skill sampah terlanjur
+  dibuat ("hai", "lanjutkan", "task", dll). Sekarang butuh KARYA nyata: file
+  dibuat, tool mutasi, atau test dijalankan; plus stoplist prompt receh dan
+  dedupe nama skill. Skill sampah lama di ~/.dhybrid/skills/ dibersihkan.
+- 21 skill sampah otomatis dihapus dari workspace user.
+
 ## [0.4.2] - 2026-08-03
 
 ### Ditambahkan

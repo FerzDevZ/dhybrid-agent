@@ -301,11 +301,22 @@ def _run_one(ctx, raw: str) -> None:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]{escl_tag}", "90"))
 
     # Auto-skill: sesi task nyata otomatis jadi skill (tanpa tanya manual).
-    # Sapaan tanpa tool (mis. "haloo?") tidak menghasilkan skill.
-    _auto_learn_skill(ctx, raw, final)
+    # Hanya bila ada KARYA nyata (file dibuat / tool mutasi / test dijalankan) —
+    # sapaan & eksplorasi ("haloo?", "lanjutkan") tidak menghasilkan skill.
+    _auto_learn_skill(ctx, raw, final, result)
 
 
-def _auto_learn_skill(ctx, raw: str, final: str) -> None:
+# Prompt receh yang tidak pernah layak jadi skill, apa pun hasilnya
+TRIVIAL_SLUGS = {
+    "hai", "halo", "hello", "hi", "hey", "p", "test", "tes", "coba", "cek",
+    "check", "task", "ya", "iya", "ok", "oke", "yes", "sip", "mantap", "bagus",
+    "thanks", "makasih", "terima-kasih", "lanjutkan", "lanjutin", "lanjut",
+    "teruskan", "continue", "next", "silahkan", "ayo", "gas", "setuju",
+    "apa", "siapa", "kapan", "dimana", "kenapa", "bagaimana",
+}
+
+
+def _auto_learn_skill(ctx, raw: str, final: str, result=None) -> None:
     from dhybrid.skills.loader import (
         auto_skill_worthwhile,
         build_skill_md,
@@ -313,12 +324,19 @@ def _auto_learn_skill(ctx, raw: str, final: str) -> None:
     )
 
     tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
-    if not auto_skill_worthwhile(tools_used, ctx.tools.tool_count, final):
+    files_created = result.files_created if result else 0
+    tests_passed = result.tests_passed if result else None
+    if not auto_skill_worthwhile(
+        tools_used, ctx.tools.tool_count, final, files_created, tests_passed
+    ):
         return
     name = slugify(raw)
-    if name == "task" or not any(c.isalpha() for c in name):
-        # prompt tidak punya kata kunci bermakna (mis. user hanya ketik "4" / "123")
+    if name == "task" or not any(c.isalpha() for c in name) or name in TRIVIAL_SLUGS:
+        # prompt tidak punya kata kunci bermakna (sapaan / "4" / "123" / "lanjutkan")
         # → bukan skill yang reusable; jangan buat sampah
+        return
+    if any(s.name == name for s in ctx.skills):
+        # skill dengan nama sama sudah ada (repo/workspace) → jangan timpa
         return
     desc = (raw.strip()[:70] or "task") + " — skill otomatis dari sesi nyata"
     steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))

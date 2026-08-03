@@ -129,6 +129,45 @@ def test_loop_pauses_for_ask_user():
     assert state.pending is None  # pertanyaan sudah diambil loop untuk REPL
 
 
+def test_loop_continuation_inherits_build_context():
+    """'lanjutkan' setelah prompt membangun → klaim selesai tanpa bukti DITOLAK
+    (di-nudge), tidak langsung finalize seperti sebelumnya."""
+    ctxm = ContextManager()
+    ctxm.push(ChatMessage(role="user", content="mulai setup dan kerjakan project login register"))
+    loop = AgentLoop(
+        ScriptedClient(["text:selesai, berhasil"]),
+        _tools(),
+        ctxm,
+        TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(max_nudges=2),
+    )
+    res = loop.run("lanjutkan", "sys")
+    # 3 model call: klaim selesai (1) → EVIDENCE_MSG nudge → klaim lagi (2) → nudge → (3) finalize
+    assert res.steps >= 3, "klaim 'selesai' tanpa bukti harus di-nudge, bukan langsung DONE"
+    assert res.stopped_early is True
+    assert res.files_created == 0
+
+
+def test_loop_build_with_evidence_not_nudged():
+    """Build dengan bukti nyata (tool mutasi dipakai) → klaim selesai TIDAK
+    di-nudge 'tidak ada bukti' (self-critique boleh tetap jalan 1x)."""
+    reg = ToolRegistry()
+    reg.register("write_file", "tulis", {"path": {"type": "string"}}, lambda **kw: "ok")
+    loop = AgentLoop(
+        ScriptedClient(["tool:write_file:x", "text:selesai, file dibuat"]),
+        reg,
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(max_nudges=2),
+    )
+    res = loop.run("buatkan file config", "sys")
+    assert res.steps == 3  # write_file → 'selesai' → self-critique (skor <90) → final
+    assert res.stopped_early is False  # ada bukti → tidak dianggap prematur
+    assert res.final_text == "selesai"
+
+
 def test_loop_ask_user_blocked_non_interactive():
     from dhybrid.tools.ask import AskState
 
@@ -163,8 +202,10 @@ def test_loop_escalates_to_big_on_errors():
     small = ScriptedClient(["errtool", "errtool", "text:jawaban kecil"], name="small")
     big = ScriptedClient(["text:jawaban besar"], name="big")
     router = HybridRouter(big_client=big, small_client=small, cache=None)
+    # 'perbaiki' sekarang termasuk BUILD_VERBS — pakai prompt netral supaya
+    # test ini fokus ke eskalasi karena error tool, bukan aturan bukti build.
     loop = AgentLoop(router, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
-    res = loop.run("jalankan pytest lalu perbaiki", "sys")
+    res = loop.run("jalankan pytest", "sys")
     assert res.escalated
     assert res.final_text == "jawaban besar"
 
@@ -394,13 +435,16 @@ class QuestionClient(LLMClient):
 
 def test_loop_nudges_build_request_to_act():
     """User minta dibuatkan, model balik bertanya tanpa kerja → loop menyodok
-    sekali agar langsung eksekusi, lalu lanjut."""
+    agar langsung eksekusi; klaim 'selesai' tanpa bukti file NYATA tetap ditolak
+    sampai nudge habis (1 jawaban + max_nudges=3 nudge)."""
     client = QuestionClient()
     loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("buatkan login register", "sys")
-    assert client.calls == 2
+    assert client.calls == 1 + loop.cfg.max_nudges
     assert "app.py" in res.final_text
     assert any("DIBUATKAN" in m.content for m in client.last_messages if m.role == "user")
+    # klaim "Selesai: app.py dibuat" TANPA file nyata → di-nudge bukti, bukan langsung diterima
+    assert any("tidak ada bukti" in m.content for m in client.last_messages if m.role == "user")
 
 
 def test_loop_no_nudge_for_non_build_question():
@@ -454,12 +498,14 @@ class PromiseClient(LLMClient):
 
 
 def test_loop_nudges_promise_to_execute():
-    """Model cuma berjanji (tidak ada file dibuat) → disodok 'EKSEKUSI sekarang'."""
+    """Model cuma berjanji (tidak ada file dibuat) → disodok 'EKSEKUSI sekarang';
+    klaim 'Selesai: app.js dibuat' tanpa bukti nyata tetap ditolak sampai nudge habis."""
     client = PromiseClient()
     loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("buatkan aplikasi login", "sys")
-    assert client.calls == 2
+    assert client.calls == 1 + loop.cfg.max_nudges
     assert "app.js" in res.final_text
+    assert any("tidak ada bukti" in m.content for m in client.last_messages if m.role == "user")
     assert any("EKSEKUSI SEKARANG" in m.content for m in client.last_messages if m.role == "user")
 
 

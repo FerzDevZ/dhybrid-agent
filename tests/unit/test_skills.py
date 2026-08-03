@@ -56,10 +56,17 @@ def test_auto_skill_worthwhile():
     assert auto_skill_worthwhile([], {}, "halo") is False
     # error → tidak
     assert auto_skill_worthwhile(["terminal"], {"terminal": 2}, "[error API] x") is False
-    # eksplorasi saja (ls/grep/read, tanpa ubah file, < 4 pemakaian) → TIDAK jadi skill
+    # eksplorasi saja (ls/grep/read/fetch, tanpa ubah file) → TIDAK jadi skill,
+    # berapa pun banyak tool yang dipakai (cegah skill sampah 'lanjutkan'/'hai')
     assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 1, "grep": 1}, "jawaban pertanyaan") is False
-    # eksplorasi berat (>= 4 pemakaian) → layak
-    assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 3, "grep": 2}, "hasil analisis") is True
+    assert auto_skill_worthwhile(["terminal", "grep"], {"terminal": 3, "grep": 2}, "hasil analisis") is False
+    assert auto_skill_worthwhile(
+        ["terminal", "git_status", "read_file", "find_files", "web_fetch"], {}, "dimana cek webnya"
+    ) is False
+    # file nyata dibuat → layak (mis. sesi lanjutan yang benar-benar mengerjakan)
+    assert auto_skill_worthwhile(["terminal", "write_file"], {"terminal": 2, "write_file": 1}, "selesai", files_created=1) is True
+    # test dijalankan → layak
+    assert auto_skill_worthwhile(["terminal", "run_tests"], {"terminal": 1, "run_tests": 1}, "semua lulus") is True
 
 
 def test_short_args_hides_content(tmp_path):

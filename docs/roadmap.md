@@ -1,6 +1,12 @@
 # Roadmap
 
-## v0.4.2 (rilis ini)
+## v0.4.3 (rilis ini)
+- [x] Fix "DONE tanpa kerja": BUILD_VERBS diperluas (kerjakan/setup/install/perbaiki/dll)
+- [x] Fix "lanjutkan": warisi konteks membangun dari riwayat sesi
+- [x] Fix klaim "selesai" tanpa bukti → di-nudge EVIDENCE_MSG sampai max_nudges
+- [x] Fix auto-skill sampah: butuh karya nyata (file/mutasi/test) + stoplist + dedupe
+
+## v0.4.2
 - [x] Tool `ask_user` — agent tanya keputusan ke user (max 2x/sesi, non-interaktif diblokir) + golden rule #1 direvisi
 - [x] Paksa skill: `/skill <nama>` + `@nama_skill` di prompt + feedback `[skill aktif: ...]`
 - [x] Matching skill pintar: alias/sinonim ("crash" → debugging), skor berbobot, riwayat sesi, nama skill

@@ -1,3 +1,3 @@
 """dhybrid-agent — CLI coding agent yang powerful dan super hemat token."""
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
