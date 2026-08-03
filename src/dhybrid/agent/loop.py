@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from dhybrid.agent.hooks import Hooks
+from dhybrid.agent.parsing import strip_tool_block
 from dhybrid.agent.quality import score_output
 from dhybrid.agent.streaming import ToolBlockFilter
 from dhybrid.agent.text_parser import extract_tool_calls_from_text
@@ -208,6 +209,40 @@ class AgentLoop:
         if created > 0:
             self.ctx.facts.add_fact(f"{created} file baru terbuat di step {step}")
 
+    def _finalize_response(self, last_text: str, result: LoopResult) -> str:
+        """Bersihkan markup tool & pastikan jawaban final TIDAK kosong.
+
+        Model free sering mengakhiri dengan blok <tool_call>/<invoke>/tag semata
+        tanpa kalimat penutup → user hanya melihat 'DONE' kosong. Bila teks final
+        kosong atau hanya berisi markup, susun ringkasan dari jejak tool
+        (file dibuat, perintah dijalankan, status test) + tawaran lanjutan, supaya
+        dhybrid selalu merespons dengan bermanfaat & 'agentic'.
+        """
+        clean = strip_tool_block(last_text or "").strip()
+        if clean:
+            return clean
+        bits: list[str] = []
+        if result.files_created:
+            bits.append(f"{result.files_created} file dibuat/diubah")
+        cmds = [
+            (ev.get("args") or {}).get("command")
+            for ev in self.tool_events
+            if ev.get("name") == "terminal"
+        ]
+        cmds = [c for c in cmds if c]
+        if cmds:
+            bits.append(f"{len(cmds)} perintah terminal dijalankan")
+        if result.tests_passed is True:
+            bits.append("test LULUS")
+        elif result.tests_passed is False:
+            bits.append("test GAGAL")
+        detail = ", ".join(bits) if bits else "langkah sudah dieksekusi"
+        return (
+            f"Pekerjaan selesai — {detail}.\n"
+            "Mau saya lanjutkan? Ketik apa yang mau diperbaiki/ditambah berikutnya, "
+            "misalnya fitur login/register lengkap, styling, atau jalankan test."
+        )
+
     def _step_once(self, client: LLMClient, messages: list[ChatMessage]) -> ChatResponse:
         """Satu turn model; streaming delta ke UI via hooks (blok ```tool disembunyikan)."""
         text = ""
@@ -393,7 +428,7 @@ class AgentLoop:
                     if is_build and not evidence:
                         result.stopped_early = True  # biar baris DONE tidak membohongi "beres"
 
-                result.final_text = last_text
+                result.final_text = self._finalize_response(last_text, result)
                 self.hooks.finish(result)
                 return result
 
@@ -453,6 +488,6 @@ class AgentLoop:
                 self.hooks.finish(result)
                 return result
 
-        result.final_text = last_text or "[max steps tercapai]"
+        result.final_text = self._finalize_response(last_text, result)
         self.hooks.finish(result)
         return result

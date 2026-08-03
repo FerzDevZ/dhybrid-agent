@@ -169,6 +169,42 @@ def test_build_question_escalates_even_with_chain_available():
     assert calls == ["high"]                   # benar-benar pindah ke model kuat
 
 
+class JunkTailClient(LLMClient):
+    """Turn 1 emit tool-call indeks <tool_call>{0,1}; turn berikutnya DIAM (teks kosong)
+    — model free yang 'macet di akhir'. Loop harus tetap memberi respons nyata."""
+
+    def __init__(self):
+        self.calls = 0
+        self.last_messages = None
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        self.last_messages = messages
+        if self.calls == 1:
+            yield StreamEvent(kind="delta", text=(
+                '<tool_call>\n{0: "terminal", 1: {"command": "pwd"}}\n<tool_call>'
+            ))
+        else:
+            yield StreamEvent(kind="delta", text="")
+        yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "junk"
+
+
+def test_loop_empty_tail_still_produces_response():
+    """Regresi utama: bila model selesai tanpa kalimat penutup (kosong),
+    dhybrid harus menyusun respons penutup — bukan 'DONE' tanpa output."""
+    client = JunkTailClient()
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
+    res = loop.run("buatkan web login register", "sys")
+    assert res.final_text and res.final_text.strip()
+    assert "Pekerjaan selesai" in res.final_text  # disintesis dari jejak tool
+
+
 class QuestionClient(LLMClient):
     """Turn 1: balik bertanya; turn 2: langsung kerjakan."""
 

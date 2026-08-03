@@ -55,15 +55,51 @@ def _iter_json_objects(text: str):
         i = j + 1
 
 
+def _parse_index_alias_calls(text: str) -> list[dict]:
+    """Bentuk {0: nama, 1: args} dengan KEY TIDAK DIBERI QUOTE (gaya python dict)
+    — model free memakai ini; json.loads biasa gagal karena key 0/1 tak di-quote."""
+    calls: list[dict] = []
+    for m in re.finditer(
+        r'\{\s*0\s*:\s*["\']\s*([A-Za-z_][A-Za-z0-9_-]*)\s*["\'].{0,60}?1\s*:\s*(\{[^{}]*\})\s*\}',
+        text,
+        re.DOTALL,
+    ):
+        name = m.group(1)
+        raw = m.group(2)
+        try:
+            args = json.loads(raw)
+        except json.JSONDecodeError:
+            args = {}
+        if isinstance(name, str) and name and isinstance(args, dict):
+            calls.append({"id": f"idx{len(calls)}", "name": name, "arguments": args})
+    return calls
+
+
 def parse_bare_json_calls(text: str) -> list[dict]:
     """Tool call sebagai JSON TELANJANG (tanpa fenced ```tool / <invoke>):
-    {\"name\": \"write_file\", \"arguments\": {...}} — model sering memakai format ini."""
+    {\"name\": \"write_file\", \"arguments\": {...}} — model sering memakai format ini.
+
+    Juga menangani bentuk BERBASIS INDEKS (model free sering meniru array):
+        {\"0\": \"terminal\", \"1\": {\"command\": \"php artisan migrate\"}}
+    termasuk versi key TANPA quote {0: ..., 1: ...}. Tanpa ini call tsb diam-diam
+    dibuang → agent terlihat 'macet / tidak ada respon' padahal ingin menjalankan tool.
+    """
     calls: list[dict] = []
     for k, obj in enumerate(_iter_json_objects(text)):
         name = obj.get("name")
         args = obj.get("arguments")
-        if isinstance(name, str) and name and isinstance(args, dict):
-            calls.append({"id": f"bare{k}", "name": name, "arguments": args})
+        # format indeks-alias: {"0": nama, "1": args}
+        if not name and obj.get("0") and isinstance(obj.get("1"), dict):
+            calls.append({"id": f"alias{k}", "name": obj["0"], "arguments": obj["1"]})
+            continue
+        if isinstance(name, str) and name:
+            if not isinstance(args, dict) and isinstance(obj.get("1"), dict):
+                args = obj["1"]
+            elif args is None:
+                args = {}
+            if isinstance(args, dict):
+                calls.append({"id": f"bare{k}", "name": name, "arguments": args})
+    calls.extend(_parse_index_alias_calls(text))
     return calls
 
 
@@ -117,6 +153,17 @@ def strip_tool_block(text: str) -> str:
     text = TOOL_RE.sub("", text)
     text = INVOKE_RE.sub("", text)
     text = TOOLCALLS_RE.sub("", text)
-    # buang baris JSON telanjang yang merupakan tool call
+    # tag <tool_call>...</tool_call> / <tool_calls> / <invoke> / <anteThinking> / <analysis>
+    text = re.sub(
+        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|analysis|anteThinking)\b[^>]*>",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    # baris JSON telanjang tool call {"name": ..., "arguments": ...}
     text = re.sub(r'^\{[^\n]*"name"\s*:\s*"[^"]+"[^\n]*\}\s*$', "", text, flags=re.MULTILINE)
+    # bentuk indeks {0: nama, 1: args} — key boleh TIDAK di-quote
+    text = re.sub(r'^\{[^\n]*\b0\s*:\s*[^\n]*\b1\s*:[^\n]*\}\s*$', "", text, flags=re.MULTILINE)
+    # baris artefak model yang hanya berisi marker (response/assistant/tool)
+    text = re.sub(r"^\s*(?:response|assistant|user|tool)\s*$", "", text, flags=re.MULTILINE | re.IGNORECASE)
     return text.strip()
