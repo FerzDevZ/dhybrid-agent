@@ -56,6 +56,12 @@ INTENT_MSG = (
     "apa pun di pesan ini. Jangan berhenti di janji/rencana — EKSEKUSI SEKARANG: jalankan "
     "tool (terminal/write_file/apply_patch) dan kerjakan sampai tuntas, lalu laporkan hasil nyata."
 )
+HARD_FINAL_MSG = (
+    "[instruksi sistem] PERINGATAN TERAKHIR — kamu sudah berulang kali menyatakan niat "
+    "(\"saya akan...\") TANPA eksekusi nyata. Respons berikutnya WAJIB berisi tool call "
+    "(terminal/write_file/apply_patch) yang benar-benar mengerjakan tugas user. Kalau "
+    "respons berikutnya masih tanpa tool call, sesi dihentikan dan dilaporkan gagal."
+)
 # Sinyal "niat tanpa eksekusi": model bilang akan mengerjakan tapi belum menjalankan tool.
 # (Hindari kata terlalu pendek seperti "lanjut"/"mari" polos — "ok, lanjut" itu jawaban sah.)
 INTENT_HINTS = (
@@ -64,6 +70,7 @@ INTENT_HINTS = (
     "berikutnya saya", "saya mulai", "saya cek dulu", "saya periksa dulu",
     "saya akan cek", "saya akan start", "saya akan jalankan", "saya akan buat",
     "lanjut eksekusi", "lanjut kerjakan", "lanjut setup",
+    "mari verifikasi", "mari cek", "mari jalankan", "mari buat", "mari mulai",
 )
 CRITIQUE_MSG = (
     "[instruksi sistem] Review hasilmu sendiri sebelum selesai: apakah sudah lengkap, benar, "
@@ -382,9 +389,13 @@ class AgentLoop:
         client = self._pick_client(user_prompt)
         errors = 0
         last_text = ""
-        nudges = 0  # sudah disodok untuk mengerjakan (max MAX_NUDGES per run)
+        nudges = 0  # sudah disodok untuk mengerjakan (max per run)
+        hard_nudged = False  # PERINGATAN TERAKHIR sudah diberikan?
         critiqued = False
         transient_retries = 0  # retry karena rate-limit/timeout sementara
+        # Tanpa escalation chain tidak ada model kuat sebagai penyelamat → budget
+        # nudge diperbesar (satu-satunya jalan: paksa model yang sama bekerja).
+        intent_budget = self.cfg.max_nudges * (2 if not self.cfg.escalation_chain else 1)
         before_files = snapshot_files(self.cwd)
         last_snapshot = before_files
         self.tool_events = []
@@ -519,7 +530,7 @@ class AgentLoop:
                             continue
 
                     # 3a) model diam → minta jawaban
-                    if is_empty and nudges < self.cfg.max_nudges:
+                    if is_empty and nudges < intent_budget:
                         nudges += 1
                         self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
                         continue
@@ -527,15 +538,18 @@ class AgentLoop:
                     # 3a2) NIAT tanpa eksekusi: "Saya akan cek dan start server:" —
                     # model berjanji/merencanakan tapi belum menjalankan tool di
                     # pesan ini. Jangan dianggap jawaban final (dulu langsung DONE
-                    # "0 file") → suruh EKSEKUSI sekarang.
-                    if (
-                        _expresses_intent(last_text)
-                        and not says_done
-                        and nudges < self.cfg.max_nudges
-                    ):
-                        nudges += 1
-                        self.ctx.push(ChatMessage(role="user", content=INTENT_MSG))
-                        continue
+                    # "0 file") → suruh EKSEKUSI sekarang. Budget lebih besar dari
+                    # max_nudges bila tidak ada escalation chain (tidak ada model
+                    # kuat untuk menyelamatkan → paksa model yang sama bekerja).
+                    if _expresses_intent(last_text) and not says_done:
+                        if nudges < intent_budget:
+                            nudges += 1
+                            self.ctx.push(ChatMessage(role="user", content=INTENT_MSG))
+                            continue
+                        if not hard_nudged:
+                            hard_nudged = True
+                            self.ctx.push(ChatMessage(role="user", content=HARD_FINAL_MSG))
+                            continue
 
                     # 3b) nudge build: diminta buat tapi belum ada bukti perubahan → jangan selesai.
                     # Klaim "selesai/done/berhasil" TANPA bukti tetap ditolak (says_done tidak bypass).
@@ -584,6 +598,7 @@ class AgentLoop:
                 return result
 
             # 4) eksekusi tool
+            nudges = 0  # aktivitas tool = progres nyata → budget nudge segar
             if resp.fallback_tool_call:
                 # MODE TEKS: hasil tool dikirim sebagai pesan user biasa —
                 # kompatibel dengan model yang tidak support native tool-calling

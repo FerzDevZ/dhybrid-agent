@@ -471,6 +471,56 @@ def test_loop_intent_text_nudged_not_final():
     )
 
 
+def test_loop_intent_budget_extended_without_chain():
+    """Tanpa escalation chain, budget nudge niat diperbesar (max_nudges*2) —
+    model lemah yang terus 'saya akan...' tidak boleh DONE setelah 3 janji."""
+    client = ScriptedClient([
+        "text:Saya akan cek dulu",
+        "text:Saya akan cek lagi",
+        "text:Saya akan lanjut dulu",
+        "text:selesai, sudah dicek",
+    ])
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD)
+    res = loop.run("cek", "sys")
+    # budget = max_nudges(3) * 2 = 6 → 3 janji di-nudge semua, baru final
+    assert res.steps == 4, "janji beruntun harus tetap di-nudge (budget diperbesar)"
+    assert res.final_text == "selesai, sudah dicek"
+
+
+def test_loop_tool_activity_resets_nudges():
+    """Aktivitas tool me-reset budget nudge — model yang SELANG-SELING janji &
+    eksekusi tidak kehabisan nudge di tengah jalan (dulu: janji → tool → 2 janji
+    lagi → budget habis → DONE di tengah pekerjaan)."""
+    client = ScriptedClient([
+        "text:Saya akan cek dulu",
+        "tool:grep:x",
+        "text:Saya akan cek hasilnya dulu",
+        "text:Saya akan cek lagi",
+        "text:ketemu: line 1",
+    ])
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD)
+    res = loop.run("cari x", "sys")
+    assert res.steps == 5
+    assert res.final_text == "ketemu: line 1", "harusnya lanjut sampai jawaban final, bukan DONE di janji"
+
+
+def test_loop_hard_final_nudge_before_give_up():
+    """Budget nudge niat habis tanpa aktivitas → 1 PERINGATAN TERAKHIR (hard
+    nudge), baru berhenti jujur — bukan berhenti diam-diam."""
+    replies = [f"text:Saya akan janji ke-{i}" for i in range(7)] + ["text:oke ini jawaban final"]
+    client = ScriptedClient(replies)
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD)
+    res = loop.run("cek", "sys")
+    # 7 janji: 6 nudge biasa (budget 6) + 1 hard nudge → final di turn ke-8
+    assert res.steps == 8
+    assert res.final_text == "oke ini jawaban final"
+    assert any(
+        "PERINGATAN TERAKHIR" in (m.content or "")
+        for m in (client.last_messages or [])
+        if m.role == "user"
+    )
+
+
 def test_loop_429_all_models_fails_friendly_message():
     """Kalaupun semua retry gagal tanpa fallback, DONE pakai pesan ramah —
     bukan stack mentah '429 Too Many Requests'."""

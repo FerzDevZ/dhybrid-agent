@@ -4,6 +4,33 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.5.5] - 2026-08-03
+
+### Bugfix: agent MASIH berhenti prematur walau sudah di-nudge (sesi nyata #5–#12)
+
+Empat sesi repl 0.5.4 dari `/home/firman/ppj` masih berakhir `DONE — 0 file`
+setelah model menulis "Saya akan uji performa..." / "Mari verifikasi dengan
+curl:" — nudge niat 0.5.4 bekerja, tapi budget `max_nudges` (3×) habis cepat,
+model free terus berjanji tanpa eksekusi, dan escalation chain kosong (tidak
+ada model kuat sebagai penyelamat).
+
+- **Budget nudge diperbesar tanpa escalation chain**: `intent_budget =
+  max_nudges * 2` bila `escalation_chain` kosong — satu-satunya jalan adalah
+  memaksa model yang sama bekerja lebih lama. 3 janji beruntun tidak lagi
+  cukup untuk DONE.
+- **Aktivitas tool me-reset budget nudge**: model yang SELANG-SELING janji dan
+  eksekusi (`cd` lalu "Mari verifikasi...") tidak kehabisan nudge di tengah
+  pekerjaan — `nudges = 0` setiap ada tool call.
+- **PERINGATAN TERAKHIR (hard nudge)**: setelah budget niat habis tanpa
+  aktivitas, satu pesan keras "respons berikutnya WAJIB tool call, kalau tidak
+  sesi dihentikan dan dilaporkan gagal" — model diberi satu kesempatan
+  terakhir sebelum berhenti jujur (bukan berhenti diam-diam).
+- **Frasa "mari verifikasi/cek/jalankan/buat/mulai"** masuk INTENT_HINTS —
+  "Server sudah running. Mari verifikasi dengan curl:" kini terdeteksi niat.
+
++3 test regresi (budget diperluas, reset-on-activity, hard nudge).
+Total **222 test lulus**, ruff 0.
+
 ## [0.5.3] - 2026-08-03
 
 ### Bugfix UI/UX
