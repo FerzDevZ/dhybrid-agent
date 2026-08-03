@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dhybrid-agent"
-version = "0.1.0"
+version = "0.4.1"
 description = "CLI coding agent — powerful, token-efficient, hybrid-routed"
 readme = "README.md"
 requires-python = ">=3.12"
