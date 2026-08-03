@@ -303,6 +303,11 @@ def cmd_pasteshot(ctx, arg: str) -> None:
             "33",
         ))
         return
+    from dhybrid.tools.vision import _is_image_bytes
+
+    if not _is_image_bytes(data[:4096]):
+        print(style("Clipboard bukan gambar (magic bytes tidak cocok PNG/JPEG).", "33"))
+        return
     name = (arg.strip() or datetime.now().astimezone().strftime("%Y%m%d-%H%M%S"))
     if not name.lower().endswith((".png", ".jpg")):
         name += ".png"

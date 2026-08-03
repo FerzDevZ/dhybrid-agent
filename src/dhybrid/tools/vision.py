@@ -62,6 +62,19 @@ def _vision_client():
         return None
 
 
+def _is_image_bytes(data: bytes) -> bool:
+    """True bila bytes benar-benar gambar (PNG/JPEG) — magic bytes dulu,
+    lalu python-magic (extra power) bila tersedia."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n" or data[:2] == b"\xff\xd8":
+        return True
+    try:
+        import magic  # python-magic (extra power, opsional)
+
+        return (magic.from_buffer(data, mime=True) or "").startswith("image/")
+    except (ImportError, Exception):  # noqa: BLE001 — magic tak ada/error → False
+        return False
+
+
 def _ocr_local(path: str) -> str:
     """OCR offline tanpa API key. rapidocr-onnxruntime (ONNX, tanpa torch) →
     pytesseract → "" (tidak tersedia)."""
@@ -98,6 +111,8 @@ def read_image(path: str = "", prompt: str = "") -> str:
         return f"ERROR: bukan file: {path}"
     if p.stat().st_size > 15 * 1024 * 1024:
         return f"ERROR: gambar terlalu besar ({p.stat().st_size // 1024 // 1024}MB, maks 15MB)"
+    if not _is_image_bytes(p.read_bytes()[:4096]):
+        return f"ERROR: {path} bukan gambar (magic bytes tidak cocok PNG/JPEG)"
 
     prompt = (prompt or _DEFAULT_PROMPT).strip()
     note = ""
