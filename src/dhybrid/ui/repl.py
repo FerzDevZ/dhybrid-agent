@@ -298,13 +298,17 @@ def _run_one(ctx, raw: str) -> None:
     clean_raw, mentions = extract_skill_mentions(raw, {s.name for s in ctx.skills})
     force = mentions or (ctx.forced_skills or None)
     history = _recent_user_history(ctx)
-    selected = select_skills(clean_raw, ctx.skills, history=history, force=force)
+    fallback_skill = ctx.cfg.skills.get("fallback", "general")
+    selected = select_skills(
+        clean_raw, ctx.skills, history=history, force=force, fallback=fallback_skill
+    )
     prompt = inject_skills(
         clean_raw, ctx.skills,
         max_inject=max_inject,
         max_chars=ctx.cfg.skills.get("max_chars", 800),
         history=history,
         force=force,
+        fallback=fallback_skill,
     )
     if selected:
         shown = selected[:max_inject]

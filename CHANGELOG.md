@@ -4,6 +4,37 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-08-03
+
+### Auto-skill wajib + Clarify cerdas — agent jadi "super powerfull"
+
+Setiap prompt sekarang otomatis memicu skill, dan prompt yang ambigu
+(contoh: "buat web login register" tanpa menyebut stack) ditanyakan
+lewat pilihan bernomor SEBELUM agent bekerja — tanpa biaya token LLM
+(murni heuristik di `agent/intent.py`).
+
+- **Skill umum bawaan `general`**: bila tidak ada skill khusus yang cocok
+  dengan prompt, skill cadangan ini di-inject otomatis (fallback). Bisa
+  dimatikan via `skills.fallback` (`None`).
+- **Feedback transparan**: `[skill aktif: general (fallback)]` selalu tampil —
+  user tahu skill apa yang dipakai agent.
+- **Clarify pra-prompt**: prompt dengan kata kerja membangun (buat/bikin/
+  bangun/...) tanpa stack → REPL menampilkan:
+  `❓ Mau pakai stack apa untuk ...?` + pilihan bernomor + default.
+  Jawaban: ketik nomor, teks bebas, atau Enter/"Lanjutkan" = opsi default.
+  Keputusan masuk konteks sebagai `[keputusan user]` dan ikut memengaruhi
+  pemilihan skill. Deteksi project cwd otomatis (composer.json → PHP/Laravel,
+  next.config → Next.js, pubspec.yaml → Flutter, go.mod, Cargo.toml, ...).
+- **Tidak mengganggu**: prompt eksplisit ("pakai laravel") tidak ditanya;
+  turn setelah jawaban clarify tidak ditanya lagi (sticky lintas turn);
+  riwayat sesi ikut diperiksa (pernah bilang "pakai laravel" → tidak ditanya
+  ulang); non-interaktif (`dhybrid run`) otomatis memakai default;
+  bisa dimatikan total via `clarify.enabled: false`.
+- **Tool `clarify`** (baru, allowlist 31): agent bisa bertanya pilihan
+  bernomor DI TENGAH kerja; guardrail sendiri 3x/sesi, terpisah dari
+  `ask_user` (2x/sesi). Loop pause otomatis, jawaban diteruskan seperti
+  `ask_user`.
+
 ## [0.7.1] - 2026-08-03
 
 ### `/pasteshot` — gambar dari clipboard (jalur terdekat dari "paste gambar ke terminal")

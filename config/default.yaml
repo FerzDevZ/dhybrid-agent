@@ -191,3 +191,8 @@ skills:
   max_inject: 3
   max_chars: 800
   auto_learn: true  # false / DHYBRID_NO_SKILL=1 → matikan skill otomatis
+  fallback: general  # skill cadangan saat tak ada yang cocok; null → matikan fallback
+
+clarify:
+  enabled: true   # false → prompt ambigu tidak ditanya, langsung jalan dengan default
+  max_per_session: 3  # batas tool clarify (agent tanya di tengah kerja)

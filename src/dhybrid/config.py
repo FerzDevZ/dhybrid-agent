@@ -39,7 +39,7 @@ class Config:
     context: dict = field(default_factory=lambda: {"keep_recent": 8, "compact_ratio": 0.5})
     tool: dict = field(default_factory=lambda: {"max_output_chars": 8000, "allowlist": []})
     delegation: dict = field(default_factory=lambda: {"max_active": 3, "max_result_chars": 2000, "max_steps": 15})
-    skills: dict = field(default_factory=lambda: {"dir": "skills", "max_inject": 3, "max_chars": 800})
+    skills: dict = field(default_factory=lambda: {"dir": "skills", "max_inject": 3, "max_chars": 800, "fallback": "general"})
     clarify: dict = field(default_factory=lambda: {"enabled": True, "max_per_session": 3})
     presets: dict = field(default_factory=dict)
 
