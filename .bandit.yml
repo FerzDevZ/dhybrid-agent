@@ -1,0 +1,12 @@
+# Bandit config — dhybrid-agent adalah TOOL RUNNER yang memang menjalankan
+# subprocess/shell (itu fungsi utamanya). Skip yang false-positive untuk
+# kategori ini; shell=True yang asli (terminal, tests) sudah diberi # nosec
+# berjustifikasi di barisnya.
+skips:
+  - B404   # import subprocess — dipakai semua tool, by design
+  - B603   # subprocess tanpa shell (list args) — pola AMAN, false positive
+  - B101   # assert di mcp.py — guard validasi, bukan kode production
+  - B110   # try/except pass — fallback sengaja (sudah ada noqa S110 di kode)
+  - B112   # try/except continue — sama, sengaja
+  - B607   # partial path (git/pytest dari PATH) — tool lokal, PATH dikontrol user
+  - B310   # urlopen scheme — SEMUA site sudah guard http/https duluan

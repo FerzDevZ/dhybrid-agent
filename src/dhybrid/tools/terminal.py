@@ -19,8 +19,10 @@ def run_command(command: str, timeout: int = 60, max_chars: int = 8000) -> str:
         if not ok:
             return "ERROR: perintah ditolak user."
     try:
+        # nosec B602 — shell=True BY DESIGN: tool terminal memang menjalankan
+        # shell; sudah dijaga gerbang is_dangerous + confirm_fn di atas.
         proc = subprocess.run(
-            command, shell=True, capture_output=True, text=True, timeout=timeout, check=False
+            command, shell=True, capture_output=True, text=True, timeout=timeout, check=False  # nosec B602
         )
         out = (proc.stdout or "")
         if proc.stderr:

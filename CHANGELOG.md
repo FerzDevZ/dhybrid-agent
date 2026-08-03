@@ -4,6 +4,21 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-08-03
+
+### Dev tooling (Tier 3 — kualitas pengembangan)
+- **CI diperluas**: job `security` baru (bandit + pip-audit) + gate coverage
+  `--cov-fail-under=65` di job test (baseline 65.2%).
+- **Bandit 0 finding**: `shell=True` di terminal/tests diberi `# nosec`
+  berjustifikasi (by design — ada gerbang is_dangerous); sisanya di-skip via
+  `.bandit.yml` dengan alasan tertulis (tool runner lokal).
+- **pip-audit bersih**: tidak ada kerentanan dependensi.
+- **pre-commit**: `.pre-commit-config.yaml` (ruff lint, versi disinkron v0.16.1
+  dengan venv; format TIDAK dipaksakan agar tidak reformat 123 file sekaligus).
+- **pytest-cov + pytest-xdist**: `pytest -n auto` (11.9s → 9.6s), coverage
+  per-modul tersedia; titik terlemah tercatat: commands 9%, repl 18%, git 24%.
+- deps dev baru: pytest-cov, pytest-xdist, bandit, pip-audit, pre-commit.
+
 ## [0.5.1] - 2026-08-03
 
 ### Fitur Baru (Tier 1: paket pendukung)

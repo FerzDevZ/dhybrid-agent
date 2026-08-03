@@ -16,8 +16,8 @@ Usage:
 from __future__ import annotations
 
 import sys
-from textwrap import dedent
 from pathlib import Path
+from textwrap import dedent
 
 GT = chr(60)      # <
 LT = chr(62)      # >  (nama: left angle / right angle)

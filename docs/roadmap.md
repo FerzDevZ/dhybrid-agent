@@ -1,11 +1,12 @@
 # Roadmap
 
-## v0.5.1 (rilis ini)
+## v0.5.2 (rilis ini)
+- [x] Tier 3 kualitas dev: pytest-cov + pytest-xdist, bandit + pip-audit
+      (CI job security), pre-commit (ruff lint), uv (catatan README)
+
+## v0.5.1
 - [x] Tier 1 paket pendukung: read_document (markitdown), REPL prompt_toolkit,
       web_fetch trafilatura, skill matching rapidfuzz
-- [ ] Tier 2: sqlite-vec (project memory), tree-sitter (AST) — model lokal
-      (ollama) DICORET permanen: user tidak mau, khawatir laptop lemah
-- [ ] Tier 3: pytest-cov + xdist, pip-audit + bandit, pre-commit, uv
 
 ## v0.5.0 (rilis ini)
 - [x] Fix parser teks: apply_patch tanpa old_string nyata tidak di-fire (+9 test text_parser)
@@ -67,6 +68,10 @@
 - [x] ~~Dukungan model lokal (adaptor ~30 baris)~~ — DIBATALKAN (preferensi user:
       tidak mau mode lokal; khawatir laptop tidak kuat menjalankannya)
 - [ ] Release binary otomatis di GitHub Actions
+
+## Tier berikutnya (opsional, belum dijadwalkan)
+- [ ] sqlite-vec (project memory) — index kode → inject konteks relevan; library ringan, bukan model lokal
+- [ ] tree-sitter (AST) — parsing kode struktural; library ringan, bukan model lokal
 
 ## Prinsip yang tidak akan berubah
 1. Hemat token adalah fitur inti, bukan tambahan.

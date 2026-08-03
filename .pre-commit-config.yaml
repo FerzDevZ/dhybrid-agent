@@ -1,0 +1,9 @@
+# pre-commit — quality gate sebelum commit: ruff lint (disiplin proyek:
+# ruff 0 error; format TIDAK dipaksakan agar tidak reformat 123 file sekaligus).
+# Pasang sekali: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      - id: ruff
+        args: [src, tests]

@@ -36,8 +36,19 @@ Variabel opsional: `DHYBRID_INSTALL_DIR`, `DHYBRID_BIN_DIR`, `DHYBRID_BRANCH`,
 ```bash
 cd dhybrid-agent
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"          # atau: uv pip install -e ".[dev]"
+pip install -e ".[dev]"          # atau (lebih cepat): uv pip install -e ".[dev]"
 cp .env.example .env             # isi API key yang kamu punya
+```
+
+### Quality gates (dev)
+
+```bash
+pytest -q                        # semua test
+pytest -q -n auto                # lebih cepat (pytest-xdist, paralel)
+pytest -q --cov=src/dhybrid      # laporan coverage
+bandit -q -r src/dhybrid -c .bandit.yml   # static security scan
+pip-audit                        # cek kerentanan dependensi
+pre-commit install               # ruff lint otomatis sebelum tiap commit
 ```
 
 ## Quickstart
