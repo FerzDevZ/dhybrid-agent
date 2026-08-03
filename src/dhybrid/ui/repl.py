@@ -261,7 +261,16 @@ def _run_one(ctx, raw: str) -> None:
     if selected:
         shown = selected[:max_inject]
         tag = "paksa" if (mentions or ctx.forced_skills) else "aktif"
-        print(style(f"[skill {tag}: {', '.join(shown)}]", "90"))
+        # transparan: skill umum cadangan ditandai (fallback) — user tahu
+        # tidak ada skill khusus yang cocok, bukan diam-diam inject umum.
+        note = (
+            " (fallback)"
+            if shown == ["general"] and not (mentions or ctx.forced_skills)
+            else ""
+        )
+        print(style(f"[skill {tag}: {', '.join(shown)}{note}]", "90"))
+    else:
+        print(style("[skill aktif: (tidak ada yang cocok)]", "90"))
     ctx.steps = 0
     ctx.last_cost = 0.0
     print()  # baris baru sebelum streaming
