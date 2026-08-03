@@ -99,6 +99,28 @@ presets:
     api_key_env: DEEPSEEK_API_KEY
     cost_per_1k_input: 0.27
     cost_per_1k_output: 1.1
+  # ---- route bynara (https://router.bynara.id/v1) — OpenAI-compatible ----
+  bynara-fast:
+    provider: openai
+    model: agnes-2.5-flash
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  bynara-medium:
+    provider: openai
+    model: stepfun-3.7-flash
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  bynara-big:
+    provider: openai
+    model: mistral-large
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
   # ---- route opencode zen (https://opencode.ai/zen/v1) — OpenAI-compatible,
   #      gratis tanpa API key; model free tersedia (deepseek-v4-flash-free dll) ----
   opencode-zen-fast:

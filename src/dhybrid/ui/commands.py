@@ -16,6 +16,7 @@ PROVIDERS = [
     ("Gemini", "GEMINI_API_KEY"),
     ("Groq", "GROQ_API_KEY"),
     ("DeepSeek", "DEEPSEEK_API_KEY"),
+    ("byNara", "BYNARA_API_KEY"),
     ("OpenCode Zen (opsional, gratis)", "OPENCODE_ZEN_API_KEY"),
 ]
 
