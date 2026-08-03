@@ -31,6 +31,7 @@ def build_tools(
         patch,
         project_memory,
         search,
+        soft,
         subagents,
         terminal,
         tests,
@@ -39,7 +40,7 @@ def build_tools(
         web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, project_memory):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, project_memory, soft):
         mod.register(reg, max_chars=max_chars)
     browser_tool.register(reg)
     vision.register(reg)
