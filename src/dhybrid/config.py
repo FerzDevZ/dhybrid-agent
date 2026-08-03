@@ -40,6 +40,7 @@ class Config:
     tool: dict = field(default_factory=lambda: {"max_output_chars": 8000, "allowlist": []})
     delegation: dict = field(default_factory=lambda: {"max_active": 3, "max_result_chars": 2000, "max_steps": 15})
     skills: dict = field(default_factory=lambda: {"dir": "skills", "max_inject": 3, "max_chars": 800})
+    clarify: dict = field(default_factory=lambda: {"enabled": True, "max_per_session": 3})
     presets: dict = field(default_factory=dict)
 
     @classmethod
@@ -70,7 +71,7 @@ class Config:
                 elif hasattr(cfg.model, k):
                     setattr(cfg.model, k, v)
 
-        for key in ("budget", "context", "tool", "delegation", "skills"):
+        for key in ("budget", "context", "tool", "delegation", "skills", "clarify"):
             if key in data and isinstance(data[key], dict):
                 setattr(cfg, key, data[key])
 

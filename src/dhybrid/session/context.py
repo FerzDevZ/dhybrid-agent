@@ -101,6 +101,7 @@ class SessionContext:
 
         self.ask_state = AskState(interactive=interactive)
         self.clarify_state = ClarifyState(interactive=interactive)
+        self.clarify_just_answered = False  # turn ini sudah clarify → jangan tanya lagi
         self.forced_skills: list[str] = []  # /skill <nama> — paksa inject tiap prompt
         self.tools: ToolRegistry = build_tools(
             cfg,

@@ -7,6 +7,7 @@ import os
 from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
+from dhybrid.llm.base import ChatMessage
 from dhybrid.skills.loader import extract_skill_mentions, inject_skills, select_skills
 from dhybrid.ui.commands import handle_command
 from dhybrid.ui.render import stream_print, style
@@ -241,9 +242,55 @@ def _run_one(ctx, raw: str) -> None:
         pass
     else:
         ctx.store.conn.execute(
-            "UPDATE sessions SET title=? WHERE id=?", (raw[:60], ctx.sid)
+            "UPDATE sessions SET title=? WHERE id=?",
+            (raw[:60], ctx.sid),
         )
         ctx.store.conn.commit()
+
+    # Clarify cerdas: prompt ambigu (mis. "buat web login" tanpa stack) → tanya
+    # pilihan bernomor SEBELUM agent jalan (tanpa biaya token LLM). Jawaban
+    # berupa angka / teks bebas / "Lanjutkan" (= default) masuk ke konteks
+    # sebagai keputusan user & ikut memengaruhi pemilihan skill di bawah.
+    # Turn setelah jawaban clarify TIDAK ditanya lagi (last_turn_was_answer).
+    was_answered = getattr(ctx, "clarify_just_answered", False)
+    ctx.clarify_just_answered = False
+    clarify_cfg = getattr(ctx.cfg, "clarify", {}) or {}
+    if clarify_cfg.get("enabled", True) and ctx.ask_state.interactive:
+        from dhybrid.agent.intent import detect_ambiguity
+
+        hint = detect_ambiguity(
+            raw,
+            cwd=ctx.cwd,
+            history=_recent_user_history(ctx),
+            last_turn_was_answer=was_answered,
+        )
+        if hint:
+            opts = hint.options
+            default_no = hint.default_index + 1
+            print(style("\n❓ " + hint.question, "1;36"))
+            for i, o in enumerate(opts, 1):
+                mark = " (default)" if i == default_no else ""
+                print(f"   {i}. {o}{mark}")
+            print(
+                style(
+                    f"   (ketik nomor, teks bebas, atau Enter/Lanjutkan = opsi {default_no})",
+                    "90",
+                )
+            )
+            try:
+                answer = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                answer = ""
+            low = answer.lower()
+            if not answer or low in ("lanjutkan", "l", "default", "ya", "y"):
+                answer = opts[hint.default_index]
+            elif answer.isdigit() and 1 <= int(answer) <= len(opts):
+                answer = opts[int(answer) - 1]
+            ctx.ctx.push(
+                ChatMessage(role="user", content=f"[keputusan user] {answer}")
+            )
+            ctx.clarify_just_answered = True
+            raw = f"{raw}\n[stack dipilih: {answer}]"
 
     max_inject = ctx.cfg.skills.get("max_inject", 3)
     # @nama_skill di prompt = paksa skill itu; /skill <nama> = paksa untuk sesi.
@@ -309,8 +356,6 @@ def _run_one(ctx, raw: str) -> None:
                     answer = opts[i - 1]
             # jawaban user = PESAN biasa, bukan prompt: tidak di-parse tool-call,
             # tidak dicocokkan skill, tidak memicu nudge build.
-            from dhybrid.llm.base import ChatMessage
-
             ctx.ctx.push(ChatMessage(role="user", content=f"[jawaban user] {answer}"))
             result = run_agent(ctx, "", push_prompt=False)
     finally:
