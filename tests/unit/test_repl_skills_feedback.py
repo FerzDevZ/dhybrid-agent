@@ -52,6 +52,7 @@ def _make_ctx(tmp_path, monkeypatch):
 
 def test_run_one_shows_fallback_general(tmp_path, monkeypatch, capsys):
     ctx, repl_mod = _make_ctx(tmp_path, monkeypatch)
+    ctx.cfg.clarify = {"enabled": False}  # fokus: feedback skill, bukan clarify
     repl_mod._run_one(ctx, "buatkan puisi tentang kucing")
     out = capsys.readouterr().out
     assert "[skill aktif: general" in out
@@ -60,6 +61,7 @@ def test_run_one_shows_fallback_general(tmp_path, monkeypatch, capsys):
 
 def test_run_one_shows_selected_skill(tmp_path, monkeypatch, capsys):
     ctx, repl_mod = _make_ctx(tmp_path, monkeypatch)
+    ctx.cfg.clarify = {"enabled": False}  # fokus: feedback skill, bukan clarify
     repl_mod._run_one(ctx, "buat web login register laravel")
     out = capsys.readouterr().out
     assert "[skill aktif:" in out
