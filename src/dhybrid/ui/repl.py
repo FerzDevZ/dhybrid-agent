@@ -175,7 +175,7 @@ def repl_loop(ctx) -> int:
     # daftar kata untuk autocomplete: semua slash-command + nama skill
     SLASH_COMMANDS = [
         "/help", "/settings", "/setup", "/key", "/model", "/tokens", "/compact",
-        "/clear", "/sessions", "/shot", "/paste", "/skills", "/skill", "/skill off", "/remember",
+        "/clear", "/sessions", "/shot", "/pasteshot", "/paste", "/skills", "/skill", "/skill off", "/remember",
         "/rmem", "/forget", "/fmem", "/memories", "/mem", "/search-memory", "/quit",
     ]
 

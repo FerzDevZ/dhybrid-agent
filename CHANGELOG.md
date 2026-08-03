@@ -4,6 +4,21 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - 2026-08-03
+
+### `/pasteshot` — gambar dari clipboard (jalur terdekat dari "paste gambar ke terminal")
+
+Terminal adalah media teks: paste gambar langsung ke REPL tidak mungkin
+(butuh protokol kitty graphics yang tidak didukung). `/pasteshot` menutup
+jaraknya: screenshot ke clipboard (Shift+PrtSc) → `/pasteshot [nama]` →
+gambar disimpan ke `~/.dhybrid/captures/` → agent baca via `read_image`.
+
+Pembaca clipboard X11: binary `xclip` (kalau ada) → python-xlib (pure
+python, tanpa sudo — masuk extra `vision`). Terverifikasi end-to-end di
+X11 nyata (selection CLIPBOARD target image/png terbaca utuh).
+
+**273 test lulus**, ruff 0, coverage 66.6% (gate 65).
+
 ## [0.7.0] - 2026-08-03
 
 ### Agent sekarang bisa MELIHAT + menerima paste apa pun

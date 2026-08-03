@@ -68,6 +68,7 @@ MENU LENGKAP — pilih dengan prefix / :
   📂 /clear              reset konteks percakapan
   📂 /sessions           daftar sesi sebelumnya
   📸 /shot [nama]        screenshot layar → ~/.dhybrid/captures/ (agent bisa baca via read_image)
+  📋 /pasteshot [nama]   ambil GAMBAR dari clipboard (SS Shift+PrtSc) → file + siap dibaca
   📋 /paste [nama]       tempel teks panjang → file .txt + langsung masuk konteks agent
   🧠 /skills             daftar skill yang tersedia
   🎯 /skill <nama>       paksa pakai skill tertentu tiap prompt (off = kembali otomatis)
@@ -234,6 +235,83 @@ def cmd_key(ctx, arg: str) -> None:
     print(style(f"OK: {env} disimpan di {p} — langsung aktif.", "32"))
 
 
+def _clipboard_image_bytes() -> bytes | None:
+    """Gambar dari clipboard X11 (hasil SS Shift+PrtSc dll).
+
+    Prioritas: binary xclip → python-xlib (pure python, tanpa sudo).
+    None bila clipboard tidak berisi gambar / bukan X11."""
+    import subprocess
+    import time
+
+    # 1) xclip (binary umum)
+    try:
+        r = subprocess.run(
+            ["xclip", "-selection", "clipboard", "-t", "image/png", "-o"],
+            capture_output=True, timeout=5, check=False,
+        )
+        if r.returncode == 0 and r.stdout:
+            return r.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # 2) python-xlib — minta selection CLIPBOARD target image/png
+    try:
+        from Xlib import X, display
+    except ImportError:
+        return None
+    try:
+        d = display.Display()
+        root = d.screen().root
+        win = root.create_window(0, 0, 1, 1, 0, X.CopyFromParent)
+        clip = d.intern_atom("CLIPBOARD")
+        png = d.intern_atom("image/png")
+        prop = d.intern_atom("_DHYBRID_CLIP")
+        win.convert_selection(clip, png, prop, X.CurrentTime)
+        d.sync()
+        deadline = time.time() + 3
+        data: bytes | None = None
+        while time.time() < deadline:
+            while d.pending_events():
+                ev = d.next_event()
+                if ev.type == X.SelectionNotify:
+                    if ev.property != X.NONE:
+                        raw = win.get_full_property(prop, X.AnyPropertyType)
+                        if raw:
+                            data = bytes(raw.value)
+                    return data
+            time.sleep(0.05)
+        d.close()
+        return None
+    except Exception:  # noqa: BLE001 — bukan X11 / clipboard kosong
+        return None
+
+
+def cmd_pasteshot(ctx, arg: str) -> None:
+    """/pasteshot [nama] — ambil GAMBAR dari clipboard (hasil SS) → file + siap dibaca.
+
+    Alur: Shift+PrtSc (screenshot ke clipboard) → /pasteshot → read_image.
+    Tidak bisa paste gambar langsung ke terminal — ini jalur terdekatnya."""
+    from datetime import datetime
+
+    cap_dir = Path.home() / ".dhybrid" / "captures"
+    cap_dir.mkdir(parents=True, exist_ok=True)
+    data = _clipboard_image_bytes()
+    if not data:
+        print(style(
+            "Clipboard tidak berisi gambar. Cara pakai: screenshot dulu "
+            "(mis. Shift+PrtSc atau gnome-screenshot -c), lalu /pasteshot.",
+            "33",
+        ))
+        return
+    name = (arg.strip() or datetime.now().astimezone().strftime("%Y%m%d-%H%M%S"))
+    if not name.lower().endswith((".png", ".jpg")):
+        name += ".png"
+    out = cap_dir / name
+    out.write_bytes(data)
+    print(style(f"OK: {out} ({len(data)} bytes) — gambar dari clipboard tersimpan.", "32"))
+    print("lalu minta agent baca: read_image path=" + str(out) + "  (atau ketik prompt biasa)")
+
+
 def cmd_shot(ctx, arg: str) -> None:
     """/shot [nama] — screenshot layar penuh (ImageMagick import) ke captures/."""
     import subprocess
@@ -375,6 +453,8 @@ def handle_command(cmd: str, ctx) -> bool:
         _cmd_search_memory(ctx, arg)
     elif name == "/shot":
         cmd_shot(ctx, arg)
+    elif name == "/pasteshot":
+        cmd_pasteshot(ctx, arg)
     elif name == "/paste":
         cmd_paste(ctx, arg)
     else:

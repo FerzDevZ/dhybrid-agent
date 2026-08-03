@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dhybrid-agent"
-version = "0.7.0"
+version = "0.7.1"
 description = "CLI coding agent — powerful, token-efficient, hybrid-routed"
 readme = "README.md"
 license = "MIT"
@@ -35,6 +35,7 @@ e2e = [
 ]
 vision = [
     "rapidocr-onnxruntime>=1.3",
+    "python-xlib>=0.33",
 ]
 dev = [
     "pytest>=8",

@@ -81,3 +81,23 @@ def test_cmd_paste_empty_not_saved(tmp_path, monkeypatch):
     monkeypatch.setattr(builtins, "input", lambda *a: (_ for _ in ()).throw(EOFError()))
     commands.cmd_paste(NS(), "kosong")
     assert not (tmp_path / ".dhybrid" / "pastes" / "kosong.txt").exists()
+
+
+def test_cmd_pasteshot_saves_clipboard(tmp_path, monkeypatch):
+    from dhybrid.ui import commands
+
+    monkeypatch.setattr(commands.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(commands, "_clipboard_image_bytes", lambda: b"\x89PNG\r\nclipdata")
+    commands.cmd_pasteshot(NS(), "ss")
+    out = tmp_path / ".dhybrid" / "captures" / "ss.png"
+    assert out.exists()
+    assert out.read_bytes() == b"\x89PNG\r\nclipdata"
+
+
+def test_cmd_pasteshot_empty_clipboard(tmp_path, monkeypatch):
+    from dhybrid.ui import commands
+
+    monkeypatch.setattr(commands.Path, "home", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(commands, "_clipboard_image_bytes", lambda: None)
+    commands.cmd_pasteshot(NS(), "ss")
+    assert not (tmp_path / ".dhybrid" / "captures" / "ss.png").exists()
