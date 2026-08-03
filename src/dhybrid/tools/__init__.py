@@ -14,12 +14,14 @@ def build_tools(
     client_factory: Callable | None = None,
     memory_store: MemoryStore | None = None,
     ask_state=None,
+    clarify_state=None,
 ) -> ToolRegistry:
     reg = ToolRegistry(allowlist=cfg.tool.get("allowlist"))
     max_chars = cfg.tool.get("max_output_chars", 8000)
     from dhybrid.tools import (
         ask,
         browser_tool,
+        clarify,
         code_map,
         documents,
         files,
@@ -47,4 +49,7 @@ def build_tools(
     from dhybrid.tools.ask import AskState
 
     ask.register(reg, ask_state or AskState(interactive=True))
+    from dhybrid.tools.clarify import ClarifyState
+
+    clarify.register(reg, clarify_state or ClarifyState(interactive=True))
     return reg

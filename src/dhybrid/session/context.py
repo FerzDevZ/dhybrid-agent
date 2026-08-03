@@ -97,14 +97,17 @@ class SessionContext:
 
         # tools + subagent factory
         from dhybrid.tools.ask import AskState
+        from dhybrid.tools.clarify import ClarifyState
 
         self.ask_state = AskState(interactive=interactive)
+        self.clarify_state = ClarifyState(interactive=interactive)
         self.forced_skills: list[str] = []  # /skill <nama> — paksa inject tiap prompt
         self.tools: ToolRegistry = build_tools(
             cfg,
             client_factory=self._fresh_client,
             memory_store=self.memory,
             ask_state=self.ask_state,
+            clarify_state=self.clarify_state,
         )
 
         self.router: HybridRouter | None = self._build_router()
