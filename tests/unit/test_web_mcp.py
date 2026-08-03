@@ -39,6 +39,22 @@ def test_web_fetch_invalid_url():
     assert "ERROR" in out
 
 
+def test_bs4_extract_messy_html():
+    """bs4+lxml menangani HTML rusak/tak valid yang membuat parser internal
+    tersendat — script dibuang, title & teks tetap tersedia."""
+    from dhybrid.tools.web import _extract_bs4
+
+    title, text = _extract_bs4(
+        "<html><head><title>TT</title></head><body>"
+        "<h1>Judul Rusak<p>paragraf <b>tebal</b><script>x()</script>"
+        "</body></html>"
+    )
+    assert title == "TT"
+    assert "Judul Rusak" in text
+    assert "paragraf tebal" in text
+    assert "x()" not in text
+
+
 def test_web_fetch_timeout_cap(tmp_path):
     srv = _serve(tmp_path)
     try:

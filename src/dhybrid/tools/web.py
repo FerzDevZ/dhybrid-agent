@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -41,8 +42,31 @@ class _TextExtractor(HTMLParser):
             self.parts.append(data.strip())
 
 
+def _extract_bs4(html: str) -> tuple[str, str]:
+    """Ekstraksi teks via BeautifulSoup + lxml — robust untuk HTML tidak valid
+    / messy (parser bawaan HTMLParser mudah tersendat). Kembalikan (title, text)."""
+    from bs4 import BeautifulSoup  # import lambat: paket opsional
+
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup(["script", "style", "noscript", "nav", "footer", "form", "svg", "header", "aside"]):
+        tag.decompose()
+    title = soup.title.get_text(" ", strip=True) if soup.title else ""
+    blocks = [
+        el.get_text(" ", strip=True)
+        for el in soup.find_all(
+            ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "pre", "code", "td", "th", "blockquote"]
+        )
+        if el.get_text(" ", strip=True)
+    ]
+    return title, "\n".join(blocks)
+
+
 def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
-    """Fetch URL → teks bersih (tanpa markup). Cap output untuk hemat token."""
+    """Fetch URL → teks bersih (tanpa markup). Cap output untuk hemat token.
+
+    Rantai ekstraksi: trafilatura (artikel bersih) → bs4+lxml (HTML umum,
+    robust) → parser internal → regex mentah.
+    """
     if not url.startswith(("http://", "https://")):
         return f"ERROR: URL harus http/https: {url}"
     try:
@@ -58,8 +82,6 @@ def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
     except Exception as e:  # noqa: BLE001
         return f"ERROR fetch {url}: {type(e).__name__}: {e}"
 
-    # ekstraksi teks bersih: trafilatura dulu (jauh lebih bersih untuk
-    # artikel/berita → hemat token), fallback ke parser internal.
     text = ""
     try:
         from trafilatura import extract as _traf_extract
@@ -70,13 +92,25 @@ def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
     except Exception:  # noqa: BLE001, S110 — trafilatura gagal → fallback
         pass
 
-    parser = _TextExtractor()
-    try:
-        parser.feed(html)
-    except Exception:  # noqa: BLE001,S110 — HTML tak valid; pakai fallback regex
-        pass
-    title = parser._title.strip() if parser._title else url
+    title = url
     if not text:
+        try:
+            b_title, b_text = _extract_bs4(html)
+            if b_title:
+                title = b_title
+            if b_text:
+                text = re.sub(r"\n{3,}", "\n\n", b_text).strip()
+        except Exception:  # noqa: BLE001,S110 — bs4 gagal → parser internal
+            pass
+
+    if not text:
+        parser = _TextExtractor()
+        try:
+            parser.feed(html)
+        except Exception:  # noqa: BLE001,S110 — HTML tak valid; pakai fallback regex
+            pass
+        if parser._title.strip():
+            title = parser._title.strip()
         text = re.sub(r"\n{3,}", "\n\n", "\n".join(p for p in parser.parts if p)).strip()
     if not text:
         text = re.sub(r"<[^>]+>", " ", html)
@@ -137,36 +171,76 @@ def _reset_search_cache() -> None:
     _SEARCH_CACHE.clear()
 
 
+def _search_ddgs_api(query: str, n: int, timeout: int) -> list[dict]:
+    """Cari via API resmi DuckDuckGo (paket `ddgs`) — lebih stabil daripada
+    scraping HTML hardcoded yang rawan berubah. Raise bila gagal → caller
+    fallback ke scraping HTML lama."""
+    from ddgs import DDGS  # import lambat: paket opsional
+
+    with DDGS(timeout=timeout) as ddgs:
+        raw = ddgs.text(query, max_results=n)
+    results: list[dict] = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        results.append(
+            {
+                "title": (item.get("title") or "").strip(),
+                "url": (item.get("href") or item.get("url") or "").strip(),
+                "body": (item.get("body") or "").strip(),
+            }
+        )
+    return [r for r in results if r["title"] or r["url"]]
+
+
+def _format_search_results(query: str, results: list[dict], n: int) -> str:
+    out_parts = []
+    for i, res in enumerate(results[:n], 1):
+        line = f"[{i}] {res['title']} — {res['url']}"
+        if res.get("body"):
+            line += f"\n    {res['body'][:200]}"
+        out_parts.append(line)
+    summary = f"Search: {query}\n\n" + "\n".join(out_parts)
+    if not out_parts:
+        summary += "\n(tidak ada hasil — DDG mungkin blokir atau query spesifik)"
+    return summary[:8000]
+
+
 def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
-    """Cari dengan DuckDuckGo HTML → top-N title+snippet (tanpa API key)."""
+    """Cari dengan DuckDuckGo → top-N title+snippet (tanpa API key).
+
+    Prioritas: API resmi (paket `ddgs`) → fallback scraping HTML lama.
+    Set env `DHYBRID_WEB_SEARCH=html` untuk memaksa path scraping (debug).
+    """
     if not query.strip():
         return "ERROR: query kosong"
     key = f"{query.strip()}|{n}"
     cached = _SEARCH_CACHE.get(key)
     if cached and (time.monotonic() - cached[0]) < _SEARCH_CACHE_TTL:
         return cached[1]
-    q = urllib.parse.urlencode({"q": query, "kl": "us-en", "df": "y"})
-    url = f"https://html.duckduckgo.com/html/?{q}"
-    try:
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
-            "Accept": "text/html",
-        })
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            html = r.read(120_000).decode("utf-8", errors="replace")
-    except Exception as e:  # noqa: BLE001
-        return f"ERROR search: {type(e).__name__}: {e}"
-    parser = _DDGResultParser()
-    parser.feed(html)
-    results = parser.results[:n] or []
-    out_parts = []
-    for i, res in enumerate(results, 1):
-        real = _ddg_url(res["title"], res["url"])
-        out_parts.append(f"[{i}] {res['title']} — {real}")
-    summary = f"Search: {query}\n\n" + "\n".join(out_parts)
+    results: list[dict] = []
+    if os.environ.get("DHYBRID_WEB_SEARCH") != "html":
+        try:
+            results = _search_ddgs_api(query, n, timeout)
+        except Exception:  # noqa: BLE001,S110 — fallback scraping lama
+            pass
     if not results:
-        summary += "\n(tidak ada hasil — DDG mungkin blokir atau query spesifik)"
-    summary = summary[:8000]
+        q = urllib.parse.urlencode({"q": query, "kl": "us-en", "df": "y"})
+        url = f"https://html.duckduckgo.com/html/?{q}"
+        try:
+            req = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+                "Accept": "text/html",
+            })
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                html = r.read(120_000).decode("utf-8", errors="replace")
+        except Exception as e:  # noqa: BLE001
+            return f"ERROR search: {type(e).__name__}: {e}"
+        parser = _DDGResultParser()
+        parser.feed(html)
+        results = [{"title": r["title"], "url": _ddg_url(r["title"], r["url"]), "body": ""}
+                   for r in parser.results]
+    summary = _format_search_results(query, results, n)
     _SEARCH_CACHE[key] = (time.monotonic(), summary)
     return summary
 

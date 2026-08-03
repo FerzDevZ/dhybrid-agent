@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from dhybrid.tools.validate import validate_args
+
 
 @dataclass
 class ToolSpec:
@@ -47,7 +49,11 @@ class ToolRegistry:
             return f"ERROR: tool '{name}' tidak diizinkan (allowlist)"
         self.tool_count[name] = self.tool_count.get(name, 0) + 1
         try:
-            out = self._tools[name].fn(**arguments)
+            cleaned = validate_args(self._tools[name].parameters, arguments)
+        except ValueError as e:
+            return f"ERROR argumen {name}: {e}"
+        try:
+            out = self._tools[name].fn(**cleaned)
             return str(out)
         except TypeError as e:
             return f"ERROR argumen {name}: {e}"

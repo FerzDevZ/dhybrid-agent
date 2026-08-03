@@ -65,15 +65,14 @@ def cmd_run(args) -> int:
     tmark = "✓" if tp else ("✗" if tp is False else "—")
     escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
     esc_msg = " (escalation: model → kuat)" if result.escalated_quality else ""
-    print(style(
-        "\n" + "─" * 44 + "\n"
+    from dhybrid.ui.rich_ui import print_done
+
+    print_done(
         f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "
-        f"· test {tmark} · sesi: {ctx.sid}\n"
-        + "─" * 44,
-        "90"
-    ))
+        f"· test {tmark} · sesi: {ctx.sid}"
+    )
     return 0
 
 
@@ -90,24 +89,20 @@ def cmd_tokens(args) -> int:
     tot_c = sum(r["completion"] for r in rows)
     tot_cached = sum(r["cached"] for r in rows)
     cost = sum(r["cost"] for r in rows)
-    print(f"penggunaan token ({label}):")
-    print(f"  prompt       : {tot_p:>10,}")
-    print(f"  completion   : {tot_c:>10,}")
-    print(f"  cached       : {tot_cached:>10,}")
-    print(f"  cache-hit    : {(tot_cached / tot_p * 100) if tot_p else 0:5.1f}%")
-    print(f"  estimasi     : ${cost:.4f}")
-    # simulasi tanpa hemat: cached ikut dibayar
-    if tot_cached:
-        print(f"  hemat cache  : ~{tot_cached:,} token input tidak dibayar ulang")
+    totals = {"prompt": tot_p, "completion": tot_c, "cached": tot_cached, "cost": cost}
+    per_session: list[tuple[str, dict]] | None = None
     if not args.session_id:
-        print("\nper sesi:")
         by_sess: dict[str, dict] = {}
         for r in rows:
             b = by_sess.setdefault(r["session_id"], {"prompt": 0, "completion": 0, "cached": 0, "cost": 0.0})
             b["prompt"] += r["prompt"]; b["completion"] += r["completion"]
             b["cached"] += r["cached"]; b["cost"] += r["cost"]
-        for sid, b in sorted(by_sess.items()):
-            print(f"  {sid}  p={b['prompt']:,} c={b['completion']:,} cached={b['cached']:,} ${b['cost']:.4f}")
+        per_session = sorted(by_sess.items())
+    from dhybrid.ui.rich_ui import print_tokens
+
+    print_tokens(label, totals, per_session)
+    if tot_cached:
+        print(f"  hemat cache  : ~{tot_cached:,} token input tidak dibayar ulang")
     return 0
 
 

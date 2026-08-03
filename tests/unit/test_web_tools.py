@@ -130,3 +130,56 @@ def test_registry_execute_dispatches():
     # web_search empty → error msg via execute
     result = reg.execute("web_search", {"query": ""})
     assert isinstance(result, str) and len(result) > 0
+
+
+def test_web_search_prefers_ddgs_api(monkeypatch):
+    """Path utama: API resmi ddgs → title + URL + snippet body."""
+    import types
+
+    from dhybrid.tools import web
+
+    monkeypatch.setattr(
+        web, "_search_ddgs_api",
+        lambda q, n, t: [{"title": "Judul Satu", "url": "https://ex.com/1", "body": "snippet singkat"}],
+    )
+    monkeypatch.setattr(web, "os", types.SimpleNamespace(environ={}))
+    web._reset_search_cache()
+    out = web.web_search("laravel breeze")
+    assert "[1] Judul Satu — https://ex.com/1" in out
+    assert "snippet singkat" in out
+    assert "tidak ada hasil" not in out
+
+
+def test_web_search_falls_back_to_html_when_ddgs_fails(monkeypatch):
+    """ddgs gagal (blokir/error) → fallback scraping HTML lama tetap jalan,
+    termasuk resolve URL redirect uddg=."""
+    import types
+    import urllib.request
+
+    from dhybrid.tools import web
+
+    def _boom(q, n, t):
+        raise RuntimeError("ddgs diblokir")
+
+    monkeypatch.setattr(web, "_search_ddgs_api", _boom)
+    monkeypatch.setattr(web, "os", types.SimpleNamespace(environ={}))
+    html = (
+        '<a class="result__a" href="https://html.duckduckgo.com/html/?uddg='
+        'https%3A%2F%2Freal.example.com%2Fx">Judul Asli</a>'
+    )
+
+    class R:
+        def read(self, n=-1):
+            return html.encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=0: R())
+    web._reset_search_cache()
+    out = web.web_search("apa itu laravel")
+    assert "Judul Asli" in out
+    assert "real.example.com/x" in out  # uddg= di-resolve ke URL nyata

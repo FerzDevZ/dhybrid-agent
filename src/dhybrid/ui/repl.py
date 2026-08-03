@@ -316,20 +316,19 @@ def _run_one(ctx, raw: str) -> None:
 
     tp = result.tests_passed
     tmark = "✓" if tp else ("✗" if tp is False else "—")
-    # format [done] yang rapi & profesional
+    # format [done] yang rapi & profesional (rich Panel saat TTY)
     escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
     esc_msg = ""
     if result.escalated_quality:
         esc_msg = " (escalation: model → kuat)"
-    print(style(
-        "\n" + "─" * 44 + "\n"
+    from dhybrid.ui.rich_ui import print_done
+
+    print_done(
         f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "
-        f"· test {tmark}\n"
-        + "─" * 44,
-        "90"
-    ))
+        f"· test {tmark}"
+    )
     if ctx.router:
         print(style(f"[routing: small={ctx.router.stats['small']} big={ctx.router.stats['big']}]{escl_tag}", "90"))
 

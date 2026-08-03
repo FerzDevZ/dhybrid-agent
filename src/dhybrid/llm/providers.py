@@ -335,4 +335,8 @@ def make_client(cfg: ModelConfig) -> LLMClient:
         return OpenAICompatClient(cfg)
     if cfg.provider == "anthropic":
         return AnthropicClient(cfg)
+    if cfg.provider == "litellm":
+        from dhybrid.llm.litellm_client import LiteLLMClient
+
+        return LiteLLMClient(cfg)
     raise ValueError(f"unsupported provider: {cfg.provider}")

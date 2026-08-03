@@ -4,6 +4,40 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-08-03
+
+### Fitur baru: 8 paket pendukung (eksekusi penuh "Kerjakan Semuanya")
+
+1. **pydantic — validasi argumen tool** (`tools/validate.py`): gerbang tipe
+   sebelum eksekusi. Kelas bug nyata `terminal(command=</parameter)` /
+   `find_files(path=-la, pattern=*)` kini ditolak lebih awal dengan pesan jelas;
+   koersi aman int↔str, `required`/`min_length` ditegakkan, argumen ekstra tetap
+   diteruskan.
+2. **ddgs — web_search via API resmi DuckDuckGo** (paket `ddgs`): scraping HTML
+   hardcoded jadi fallback otomatis; hasil kini memuat snippet (title+url+body).
+   Env `DHYBRID_WEB_SEARCH=html` untuk memaksa jalur lama.
+3. **rich — UI profesional**: blok DONE jadi Panel (repl & run), dashboard
+   `/tokens` jadi Table. Otomatis polos di non-TTY/NO_COLOR (standar no-color.org).
+4. **tree-sitter — tool `code_map`**: AST fungsi/class per file (python, php,
+   javascript) + rentang baris — konteks struktur tanpa baca seluruh file.
+5. **sqlite-vec — tool `mem_index`/`mem_search`/`mem_reset`**: memory kode
+   proyek, chunk 40 baris → vektor char 3-gram 256-d (L2-normalisasi), pencarian
+   top-k via virtual table `vec0`; fallback cosine Python bila ekstensi gagal.
+   DB per proyek di `<cwd>/.dhybrid/mem.sqlite` (env `DHYBRID_MEM_DB`).
+6. **beautifulsoup4 + lxml — fallback ekstraksi `web_fetch`**: trafilatura →
+   bs4+lxml (robust untuk HTML rusak) → parser internal → regex. `<title>` kini
+   benar-benar terisi (sebelumnya selalu URL).
+7. **litellm — adapter `LiteLLMClient` opsional**: provider `litellm` mendukung
+   100+ model ("openai/gpt-4o", "anthropic/...", "gemini/...", dll). Default
+   path openai/anthropic TIDAK berubah; import lambat, `drop_params=True`.
+8. **playwright — tool `browser`** (extra `e2e`): navigate/click/type/snapshot
+   headless untuk verifikasi web E2E (mis. app Laravel lokal); state browser
+   dipertahankan antar panggilan; pesan ramah bila belum di-install.
+
++5 tool baru masuk allowlist default (23 → 28). Deps baru masuk `dependencies`
+(playwright di optional-dependencies `e2e`). **257 test lulus**, ruff 0,
+coverage 67.3% (gate 65).
+
 ## [0.5.5] - 2026-08-03
 
 ### Bugfix: agent MASIH berhenti prematur walau sudah di-nudge (sesi nyata #5–#12)
