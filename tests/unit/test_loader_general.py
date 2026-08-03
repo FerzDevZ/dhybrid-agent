@@ -1,7 +1,7 @@
 """Test skill umum bawaan `general` — fallback auto-skill saat tak ada yang cocok."""
 
 from dhybrid.dotenv import install_dir
-from dhybrid.skills.loader import list_skills
+from dhybrid.skills.loader import Skill, inject_skills, list_skills, select_skills
 
 
 def test_general_skill_bundled():
@@ -15,3 +15,37 @@ def test_general_skill_has_description():
     assert sk is not None
     assert sk.description
     assert len(sk.body) >= 100
+
+
+def _sk(name: str, desc: str) -> Skill:
+    return Skill(name=name, description=desc, body=f"body {name}", path=None)
+
+
+def test_select_skills_fallback_general():
+    names = select_skills("buat web login", [_sk("database", "sql query")])
+    assert names == ["general"]
+
+
+def test_select_skills_no_fallback_when_disabled():
+    names = select_skills("buat web login", [_sk("database", "sql query")], fallback=None)
+    assert names == []
+
+
+def test_select_skills_keeps_real_match_over_fallback():
+    names = select_skills("buat web login", [_sk("laravel-scaffold", "setup laravel auth")])
+    assert names == ["laravel-scaffold"]
+
+
+def test_inject_skills_fallback_general():
+    out = inject_skills("buat web login", [_sk("general", "panduan umum"), _sk("database", "sql query")])
+    assert "[SKILL: general]" in out
+    assert "panduan umum" in out
+
+
+def test_inject_skills_no_fallback_when_disabled():
+    out = inject_skills(
+        "buat web login",
+        [_sk("general", "panduan umum")],
+        fallback=None,
+    )
+    assert out == "buat web login"

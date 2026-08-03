@@ -147,10 +147,13 @@ def select_skills(
     history: str = "",
     force: list[str] | None = None,
     min_score: int = 1,
+    fallback: str | None = "general",
 ) -> list[str]:
     """Pilih skill relevan (urut skor turun); `force` selalu didahulukan.
 
     Return daftar nama skill yang LAYAK di-inject (belum dipotong max_inject).
+    Bila TIDAK ADA yang cocok dan `fallback` diberikan → return [fallback]
+    (skill umum bawaan) supaya tiap prompt DIJAMIN dapat skill.
     """
     pk = _keywords(prompt)
     hk = _keywords(history) if history else None
@@ -185,6 +188,8 @@ def select_skills(
             rest.append((sc, sk))
     rest.sort(key=lambda x: -x[0])
     ordered = [by_name[n] for n in forced_hits] + [s for _, s in rest]
+    if not ordered and fallback and fallback in by_name:
+        return [fallback]
     return [s.name for s in ordered]
 
 
@@ -267,13 +272,15 @@ def inject_skills(
     max_chars: int = 800,
     history: str = "",
     force: list[str] | None = None,
+    fallback: str | None = "general",
 ) -> str:
     """Tambahkan body skill yang relevan ke prompt (prefix).
 
     - relevansi: kata kunci prompt + riwayat sesi + sinonim (lihat select_skills)
     - `force`: nama skill yang WAJIB di-inject (didahulukan, dipakai /skill & @nama)
+    - `fallback`: skill cadangan bila tak ada yang cocok (default "general")
     """
-    names = select_skills(prompt, skills, history=history, force=force)
+    names = select_skills(prompt, skills, history=history, force=force, fallback=fallback)
     by_name = {s.name: s for s in skills}
     parts = []
     for n in names[:max_inject]:
