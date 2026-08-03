@@ -1,6 +1,6 @@
 """ContextManager — jendela konteks dengan kompaksi.
 
-KnownFacts tracker mencegah agen bertanya hal yang sudah diketahati.
+KnownFacts tracker mencegah agen bertanya hal yang sudah diketahui.
 """
 
 from __future__ import annotations
@@ -48,15 +48,18 @@ class KnownFacts:
         self.asked_questions.append(question)
 
     def render(self) -> str:
-        """Render facts & asked questions ke string untuk inject ke prompt."""
+        """Render facts & asked questions ke string untuk inject ke prompt.
+
+        Dibatasi (8 fakta / 3 pertanyaan terakhir) supaya hemat token.
+        """
         parts = []
         if self.facts:
-            parts.append("Fakta yang sudah diketahati:")
-            for f in sorted(self.facts):
+            parts.append("Fakta yang sudah diketahui:")
+            for f in sorted(self.facts)[-8:]:
                 parts.append(f"  - {f}")
         if self.asked_questions:
-            parts.append("Pertanyaan yang sudah diajukan:")
-            for q in self.asked_questions[-5:]:
+            parts.append("Pertanyaan yang sudah diajukan (jangan tanya ulang):")
+            for q in self.asked_questions[-3:]:
                 parts.append(f"  - {q[:100]}")
         return "\n".join(parts) if parts else ""
 
@@ -91,6 +94,19 @@ class ContextManager:
                     content=(
                         "Berikut ringkasan percakapan SEBELUM ini. Pakai hanya bila relevan, "
                         f"jangan ulangi: {self.summary}"
+                    ),
+                )
+            )
+        # fakta & pertanyaan yang sudah diketahui → model TIDAK boleh tanya ulang
+        facts = self.facts.render()
+        if facts:
+            out.append(
+                ChatMessage(
+                    role="system",
+                    content=(
+                        "[KONTEKS YANG SUDAH DIKETAHUI]\n"
+                        f"{facts}\n"
+                        "JANGAN tanya ulang hal yang sudah diketahui; eksplor dengan tool, bukan bertanya."
                     ),
                 )
             )

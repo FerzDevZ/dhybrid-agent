@@ -8,6 +8,10 @@ import re
 TOOL_RE = re.compile(r"```tool\n(.*?)\n```", re.DOTALL)
 INVOKE_RE = re.compile(r'<invoke name="([\w_]+)">(.*?)</invoke>', re.DOTALL)
 TOOLCALLS_RE = re.compile(r"<tool_calls>.*?</tool_calls>", re.DOTALL)
+# <function=terminal>  ... <arg_key>command</arg_key><arg_value>cdn ...</arg_value> ... </function>
+FUNC_TAG_RE = re.compile(r"<function\s*=\s*([\w-]+)>(.*?)</function>", re.DOTALL)
+ARG_KEY_RE = re.compile(r"<arg_key\s*>\s*([\w.]+)\s*</arg_key>", re.DOTALL)
+ARG_VALUE_RE = re.compile(r"<arg_value\s*>(.*?)</arg_value>", re.DOTALL)
 
 
 def parse_tool_call(text: str) -> dict | None:
@@ -75,6 +79,24 @@ def _parse_index_alias_calls(text: str) -> list[dict]:
     return calls
 
 
+def _parse_function_tag_calls(text: str) -> list[dict]:
+    """Format gaya function-call: <function=terminal> <arg_key>command</arg_key>
+    <arg_value>cd ..</arg_value> </function>. Model free kadang menulis begini.
+    """
+    calls: list[dict] = []
+    for k, m in enumerate(FUNC_TAG_RE.finditer(text)):
+        name = m.group(1)
+        content = m.group(2)
+        keys = ARG_KEY_RE.findall(content)
+        vals = [v.strip() for v in ARG_VALUE_RE.findall(content)]
+        args = {}
+        for i, key in enumerate(keys):
+            if i < len(vals) and vals[i]:
+                args[key] = vals[i]
+        calls.append({"id": f"func{k}", "name": name, "arguments": args})
+    return calls
+
+
 def parse_bare_json_calls(text: str) -> list[dict]:
     """Tool call sebagai JSON TELANJANG (tanpa fenced ```tool / <invoke>):
     {\"name\": \"write_file\", \"arguments\": {...}} — model sering memakai format ini.
@@ -134,6 +156,7 @@ def parse_tool_calls(text: str) -> list[dict]:
             args = {"value": raw}
         calls.append({"id": f"inv{j}", "name": name, "arguments": args})
     calls.extend(parse_bare_json_calls(text))
+    calls.extend(_parse_function_tag_calls(text))
     return dedupe_tool_calls(calls)
 
 
@@ -153,13 +176,16 @@ def strip_tool_block(text: str) -> str:
     text = TOOL_RE.sub("", text)
     text = INVOKE_RE.sub("", text)
     text = TOOLCALLS_RE.sub("", text)
-    # tag <tool_call>...</tool_call> / <tool_calls> / <invoke> / <anteThinking> / <analysis>
+    text = FUNC_TAG_RE.sub("", text)  # buang <function>...</function> sekaligus isinya
+    # tag <tool_call>/<tool_calls>/<invoke>/<function=..>/<analysis>/<anteThinking>
     text = re.sub(
-        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|analysis|anteThinking)\b[^>]*>",
+        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|function|analysis|anteThinking)\b[^>]*>",
         "",
         text,
         flags=re.IGNORECASE,
     )
+    # tag arg <arg_key>../</arg_key> & <arg_value>../</arg_value>
+    text = re.sub(r"<\s*/?\s*arg_(?:key|value)\b[^>]*>", "", text, flags=re.IGNORECASE)
     # baris JSON telanjang tool call {"name": ..., "arguments": ...}
     text = re.sub(r'^\{[^\n]*"name"\s*:\s*"[^"]+"[^\n]*\}\s*$', "", text, flags=re.MULTILINE)
     # bentuk indeks {0: nama, 1: args} — key boleh TIDAK di-quote

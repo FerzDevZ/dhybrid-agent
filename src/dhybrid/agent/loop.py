@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass, field
 
 from dhybrid.agent.hooks import Hooks
@@ -61,6 +62,23 @@ def _looks_complete(text: str) -> bool:
 def _is_build_request(prompt: str) -> bool:
     low = prompt.lower()
     return any(v in low for v in BUILD_VERBS)
+
+
+def _is_transient_error(e: Exception) -> bool:
+    """Error jaringan/rate-limit yang SELAYAKNYA di-retry, bukan langsung menyerah.
+
+    Menghindari DONE dengan stack mentah '429 Too Many Requests' padahal cuma
+    sementara — retry dulu, baru escalate ke model lain.
+    """
+    s = str(e).lower()
+    markers = (
+        "429", "500", "502", "503", "504",
+        "too many requests", "rate limit",
+        "temporary failure", "name resolution",  # DNS
+        "connection", "connect error",
+        "timed out", "timeout", "reset by peer", "gateway",
+    )
+    return any(m in s for m in markers)
 
 
 def _ends_with_question(text: str) -> bool:
@@ -197,17 +215,30 @@ class AgentLoop:
             return False
         return self.ctx.facts.already_asked(text.strip())
 
-    def _live_verify(self, step: int, before_files: set[str]) -> None:
-        """Tiap 2 steps: cek file baru di workspace → inject evidence ke prompt.
+    def _live_verify(self, step: int, last_snapshot: set[str]) -> set[str]:
+        """Tiap 2 steps: cek file baru sejak snapshot terakhir → INJECT evidence ke prompt.
 
-        Ini memungkinkan model tahu progres secara real-time, bukan tunggu akhir.
+        Ini membuat model 'melihat' kemajuan pekerjaan secara real-time
+        (bukan tunggu akhir): fakta progresnya ditambah + pesan ringkas disodorkan.
+        Mengembalikan snapshot terakhir supaya jumlah file baru dihitung inkremental.
         """
-        if step % 2 != 0 or step <= 0:  # hanya di step genap (2, 4, 6, ...)
-            return
+        if step % 2 != 0 or step <= 0:
+            return last_snapshot
         after = snapshot_files(self.cwd)
-        created = count_created_files(before_files, after)
+        created = count_created_files(last_snapshot, after)
         if created > 0:
-            self.ctx.facts.add_fact(f"{created} file baru terbuat di step {step}")
+            self.ctx.facts.add_fact(f"{created} file baru terbuat (step {step})")
+            self.ctx.push(
+                ChatMessage(
+                    role="user",
+                    content=(
+                        f"[verifikasi] Sistem mendeteksi {created} file baru di workspace. "
+                        "Lanjutkan pekerjaan; kalau sudah tuntas beri ringkasan singkat & akurat."
+                    ),
+                )
+            )
+            return after
+        return last_snapshot
 
     def _finalize_response(self, last_text: str, result: LoopResult) -> str:
         """Bersihkan markup tool & pastikan jawaban final TIDAK kosong.
@@ -284,7 +315,9 @@ class AgentLoop:
         last_text = ""
         nudges = 0  # sudah disodok untuk mengerjakan (max MAX_NUDGES per run)
         critiqued = False
+        transient_retries = 0  # retry karena rate-limit/timeout sementara
         before_files = snapshot_files(self.cwd)
+        last_snapshot = before_files
         self.tool_events = []
 
         for step in range(self.cfg.max_steps):
@@ -296,7 +329,17 @@ class AgentLoop:
             try:
                 resp = self._step_once(client, self.ctx.render(system_prompt))
             except Exception as e:  # noqa: BLE001 — API error
-                # RETRY: lewati chain escalation ke model valid berikutnya.
+                # 2a) transient (429/timeout/DNS) → retry model yang sama dengan backoff,
+                #     JANGAN langsung menyerah/stop dengan stack mentah.
+                if _is_transient_error(e) and transient_retries < 2 and not self.budget.exhausted:
+                    transient_retries += 1
+                    self.ctx.push(ChatMessage(role="user", content=(
+                        f"[sistem] Gagal sementara ({type(e).__name__}) — coba ulang "
+                        f"({transient_retries}/2)."
+                    )))
+                    time.sleep(min(2 ** transient_retries, 5))
+                    continue
+                # 2b) RETRY: lewati chain escalation ke model valid berikutnya.
                 # (jangan langsung stop — agen berjuang sampai semua model gagal)
                 nxt = self._next_valid_escalation()
                 if nxt:
@@ -309,8 +352,15 @@ class AgentLoop:
                                 f"Coba model kuat berikutnya: {next_preset}. Silakan lanjutkan."
                     ))
                     continue
-                # semua model gagal → berhenti dengan error yang jelas
-                result.final_text = f"[error API] {type(e).__name__}: {e}"
+                # 2c) semua jalan buntu → berhenti dengan pesan ramah
+                if _is_transient_error(e):
+                    result.final_text = (
+                        "⚠️ Penyedia model sedang sibuk/menolak (rate limit atau timeout). "
+                        "Tunggu sebentar lalu ulangi, atau ganti model lain via /settings "
+                        "(mis. opencode-zen-* yang gratis)."
+                    )
+                else:
+                    result.final_text = f"[error API] {type(e).__name__}: {e}"
                 result.quality_score = 0
                 self.hooks.finish(result)
                 return result
@@ -326,7 +376,7 @@ class AgentLoop:
             self.hooks.step(step, resp.model, resp.usage, self.budget.used)
             # live verify: cek file baru tiap 2 steps (setelah step 2)
             if step > 0:
-                self._live_verify(step, before_files)
+                last_snapshot = self._live_verify(step, last_snapshot)
 
             # 3) early-stop: jawaban tanpa tool-call — TAPI hanya bila benar-benar final.
             # Task membangun TIDAK boleh berhenti: (a) sambil bertanya/meminta user pilih,
@@ -348,21 +398,23 @@ class AgentLoop:
                 result.stopped_early = needs_change_check(last_text)
                 is_empty = not last_text.strip()
                 asks_qa = _ends_with_question(last_text)
+                repeated_qa = self._is_repeated_question(last_text)
                 says_done = _looks_complete(last_text)
                 evidence = v["files_created"] > 0 or self._used_mutating_tool()
 
                 if not self.budget.exhausted:
                     # jangan tanya berulang soal yang sudah diajukan
-                    if asks_qa:
+                    if asks_qa or repeated_qa:
                         self.ctx.facts.mark_asked(last_text.strip())
 
-                    # 3d-FIRST) eskalasi kualitas: skor rendah ATAU task membangun masih bertanya
-                    # → langsung naik model kuat (bukan cuma nudge-ulang yang membuang token).
+                    # 3d-FIRST) eskalasi kualitas: skor rendah, ATAU build masih bertanya /
+                    # tanya ulang → langsung naik model kuat (bukan cuma nudge lagi
+                    # yang membuang token atas model lemah).
                     if (
                         self.cfg.escalation_chain
                         and self._client_factory is not None
                         and self._n_escalations < self.cfg.max_escalations
-                        and (score < self.cfg.quality_threshold or (is_build and asks_qa))
+                        and (score < self.cfg.quality_threshold or (is_build and (asks_qa or repeated_qa)))
                     ):
                         nxt = self._next_valid_escalation()
                         if nxt:
@@ -400,9 +452,9 @@ class AgentLoop:
                         )
                         continue
 
-                    # 3b2) HARD RULE: build diakhiri pertanyaan dan escalation sudah habis
+                    # 3b2) HARD RULE: build diakhiri pertanyaan / tanya ulang dan escalation sudah habis
                     # → tetap jangan disangkakan "selesai". Sodor pilih-default lalu lanjut.
-                    if is_build and asks_qa and nudges < self.cfg.max_nudges * 2:
+                    if is_build and (asks_qa or repeated_qa) and nudges < self.cfg.max_nudges * 2:
                         nudges += 1
                         self.ctx.push(ChatMessage(role="user", content=(
                             "[instruksi sistem] Kamu masih mengajukan pertanyaan/menawarkan pilihan "

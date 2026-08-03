@@ -205,6 +205,99 @@ def test_loop_empty_tail_still_produces_response():
     assert "Pekerjaan selesai" in res.final_text  # disintesis dari jejak tool
 
 
+def _tools_writer(cwd):
+    from pathlib import Path
+
+    reg = ToolRegistry()
+
+    def _write(path):
+        (Path(cwd) / path).write_text("x")
+        return "ok"
+
+    reg.register("write", "tulis file", {"path": {"type": "string"}}, _write)
+    return reg
+
+
+class WriterClient(LLMClient):
+    """Tulis 2 file (step 0 & 1), lalu jawab final (step 2) — memicu live-verify."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        if self.calls in (1, 2):
+            yield StreamEvent(kind="tool_call", tool_call={
+                "id": f"t{self.calls}", "name": "write",
+                "arguments": {"path": f"f{self.calls}.py"},
+            })
+        else:
+            yield StreamEvent(kind="delta", text="selesai")
+        yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "writer"
+
+
+def test_loop_live_verify_injects_file_evidence(tmp_path):
+    """Live verifier harus BENAR-BENAR menyuntik evidence ke prompt model
+    saat file baru terdeteksi (membuat agent sadar progres, bukan dead-code)."""
+    client = WriterClient()
+    loop = AgentLoop(client, _tools_writer(tmp_path), ContextManager(),
+                     TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=str(tmp_path))
+    res = loop.run("buatkan aplikasi", "sys")
+    assert res.steps >= 3
+    assert any(
+        "[verifikasi]" in m.content and "file" in m.content
+        for m in loop.ctx.messages
+        if m.role == "user"
+    )
+
+
+class Flaky429Client(LLMClient):
+    """Model yang raise HTTP 429 sebanyak fail_times, lalu menjawab normal."""
+
+    def __init__(self, fail_times=1):
+        self.fail_times = fail_times
+        self.calls = 0
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise RuntimeError("ConnectError/HTTPStatusError: 429 Too Many Requests")
+        yield StreamEvent(kind="delta", text="Selesai ok.")
+        yield StreamEvent(kind="done", usage=Usage(5, 5))
+
+    def complete(self, messages, **kw):
+        return ChatResponse(message=ChatMessage(role="assistant", content="ok"), usage=Usage(), model="fake")
+
+    def model_name(self):
+        return "flaky"
+
+
+def test_loop_retries_transient_429():
+    """429 (sementara) tidak langsung DONE — retry model yang sama, lalu sukses."""
+    c = Flaky429Client(fail_times=1)
+    loop = AgentLoop(c, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD)
+    res = loop.run("apa saja", "sys")
+    assert c.calls == 2  # 1 gagal transient + 1 sukses
+    assert res.final_text == "Selesai ok."
+
+
+def test_loop_429_all_models_fails_friendly_message():
+    """Kalaupun semua retry gagal tanpa fallback, DONE pakai pesan ramah —
+    bukan stack mentah '429 Too Many Requests'."""
+    c = Flaky429Client(fail_times=5)
+    loop = AgentLoop(c, _tools(), ContextManager(), TokenBudget(soft=10 ** 9, hard=10 ** 9), cwd=EMPTY_CWD,
+                     cfg=LoopConfig(max_steps=4, escalation_chain=[]))
+    res = loop.run("untuk apa", "sys")
+    assert "429" not in res.final_text
+    assert "rate limit" in res.final_text.lower() or "model" in res.final_text.lower()
+
+
 class QuestionClient(LLMClient):
     """Turn 1: balik bertanya; turn 2: langsung kerjakan."""
 

@@ -58,3 +58,28 @@ def test_strip_tool_call_tags_and_index_lines():
          "</anteThinking>\n<tool_call>\nresponse\n")
     # prosa yang tersisa setelah markup dibersihkan
     assert strip_tool_block(t) == "Selesai."
+
+
+# ---- Format <function=terminal><arg_key>/<arg_value> (gaya function-call) ----
+
+
+def test_parse_function_tag_format():
+    text = ("<tool_call>\n"
+            "<function=terminal>\n"
+            "<arg_key>command</arg_key>\n"
+            "<arg_value>cd /home/p && php artisan serve</arg_value>\n"
+            "</function>\n"
+            "</tool_call>")
+    calls = parse_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0]["name"] == "terminal"
+    assert calls[0]["arguments"]["command"] == "cd /home/p && php artisan serve"
+
+
+def test_strip_function_tag_block():
+    t = ("Penasaran.\n"
+         "<function=terminal>\n<arg_key>command</arg_key>\n<arg_value>pwd</arg_value>\n</function>\n"
+         "Selesai cek.")
+    out = strip_tool_block(t)
+    assert "<function" not in out and "arg_key" not in out and "pwd" not in out
+    assert "Penasaran." in out and "Selesai cek." in out

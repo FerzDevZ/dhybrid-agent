@@ -52,3 +52,35 @@ def test_render_includes_system_and_summary():
 def test_compact_conversation_uses_client():
     out = compact_conversation(FakeClient("Tujuan: fix bug"), [ChatMessage(role="user", content="a")])
     assert out == "Tujuan: fix bug"
+
+
+# ---- KnownFacts sekarang benar-benar di-inject ke konteks model ----
+
+
+def test_render_injects_known_facts():
+    cm = ContextManager()
+    cm.facts.add_fact("php tersedia")
+    cm.facts.mark_asked("mau stack apa?")
+    cm.push(ChatMessage(role="user", content="halo"))
+    out = cm.render("SYS")
+    sys_blocks = "\n".join(m.content for m in out if m.role == "system")
+    assert "php tersedia" in sys_blocks
+    assert "mau stack apa?" in sys_blocks
+    assert "JANGAN tanya ulang" in sys_blocks
+
+
+def test_known_facts_render_caps_length():
+    cm = ContextManager()
+    for i in range(12):
+        cm.facts.add_fact(f"fakta{i}")
+    r = cm.facts.render()
+    assert r.count("fakta") == 8          # hanya 8 fakta terakhir
+    assert "fakta0" not in r
+
+
+def test_known_facts_render_caps_questions():
+    cm = ContextManager()
+    for i in range(5):
+        cm.facts.mark_asked(f"pertanyaan{i}?")
+    r = cm.facts.render()
+    assert r.count("pertanyaan") == 3     # hanya 3 pertanyaan terakhir
