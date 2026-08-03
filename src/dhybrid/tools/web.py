@@ -58,13 +58,26 @@ def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
     except Exception as e:  # noqa: BLE001
         return f"ERROR fetch {url}: {type(e).__name__}: {e}"
 
+    # ekstraksi teks bersih: trafilatura dulu (jauh lebih bersih untuk
+    # artikel/berita → hemat token), fallback ke parser internal.
+    text = ""
+    try:
+        from trafilatura import extract as _traf_extract
+
+        body = _traf_extract(html, include_comments=False, include_tables=True)
+        if body and len(body.strip()) > 50:
+            text = re.sub(r"\n{3,}", "\n\n", body).strip()
+    except Exception:  # noqa: BLE001, S110 — trafilatura gagal → fallback
+        pass
+
     parser = _TextExtractor()
     try:
         parser.feed(html)
     except Exception:  # noqa: BLE001,S110 — HTML tak valid; pakai fallback regex
         pass
     title = parser._title.strip() if parser._title else url
-    text = re.sub(r"\n{3,}", "\n\n", "\n".join(p for p in parser.parts if p)).strip()
+    if not text:
+        text = re.sub(r"\n{3,}", "\n\n", "\n".join(p for p in parser.parts if p)).strip()
     if not text:
         text = re.sub(r"<[^>]+>", " ", html)
         text = re.sub(r"\s{2,}", " ", text).strip()

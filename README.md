@@ -53,6 +53,13 @@ dhybrid run --json "cek repo"    # output JSON terstruktur (scripting/CI)
 dhybrid doctor                   # diagnosa config, key, chain, allowlist, skill
 ```
 
+### Baca dokumen kantor
+
+```
+read_document path/laporan.pdf   # PDF/DOCX/XLSX/PPTX/HTML → markdown
+                                 # (via markitdown; dulu cuma file teks)
+```
+
 ### Command REPL
 
 ```

@@ -4,6 +4,20 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-08-03
+
+### Fitur Baru (Tier 1: paket pendukung)
+- **read_document** (markitdown): agent kini bisa baca PDF/DOCX/XLSX/PPTX/HTML
+  → markdown. Sebelumnya cuma file teks polos. Terdaftar di allowlist default.
+- **REPL prompt_toolkit**: history search (Ctrl-R), autocomplete /command &
+  nama skill (fuzzy), paste multi-line. Non-TTY (piped) tetap fallback input().
+- **web_fetch pakai trafilatura**: ekstraksi artikel bersih (nav/iklan dibuang)
+  → output lebih pendek & hemat token; fallback ke parser internal.
+- **Skill matching rapidfuzz**: typo "debuging" → skill debugging tetap
+  ter-inject; skill relevan + mirip prompt naik prioritas.
+- dependensi baru: prompt_toolkit, markitdown[pdf,docx,pptx,xlsx], trafilatura,
+  rapidfuzz (semua opsional-impor — error beri pesan install yang jelas).
+
 ## [0.5.0] - 2026-08-03
 
 ### Diperbaiki

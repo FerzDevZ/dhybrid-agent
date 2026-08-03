@@ -171,6 +171,34 @@ def test_select_skills_forced_first():
     assert "debugging" in names  # relevan tetap ikut
 
 
+def test_select_skills_fuzzy_typo():
+    """rapidfuzz: typo 'debuging' (hilang 1 huruf) tetap ketemu skill debugging."""
+    from pathlib import Path
+
+    from dhybrid.skills.loader import Skill, select_skills
+
+    skills = [
+        Skill("tdd", "TDD test-driven development", "TDD body", Path("x")),
+        Skill("debugging", "Debug error traceback", "Debug body", Path("y")),
+    ]
+    names = select_skills("ada debuging di kode", skills)
+    assert "debugging" in names  # fuzzy menangkap typo
+
+
+def test_select_skills_fuzzy_boost():
+    """Skill yang relevan DAN mirip prompt naik prioritas (+1 skor)."""
+    from pathlib import Path
+
+    from dhybrid.skills.loader import Skill, select_skills
+
+    skills = [
+        Skill("web-tools", "cari informasi di internet web search", "body", Path("x")),
+        Skill("sql-query-optimization", "SQL query database", "body", Path("y")),
+    ]
+    names = select_skills("cari di web informasi terbaru", skills)
+    assert names[0] == "web-tools"  # relevan + fuzzy → prioritas
+
+
 def test_ask_user_non_interactive_blocked():
     from dhybrid.tools.ask import BLOCKED_SENTINEL, AskState, register
     from dhybrid.tools.registry import ToolRegistry

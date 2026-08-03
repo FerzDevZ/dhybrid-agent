@@ -1,5 +1,11 @@
 # Roadmap
 
+## v0.5.1 (rilis ini)
+- [x] Tier 1 paket pendukung: read_document (markitdown), REPL prompt_toolkit,
+      web_fetch trafilatura, skill matching rapidfuzz
+- [ ] Tier 2: ollama (model lokal), sqlite-vec (project memory), tree-sitter (AST)
+- [ ] Tier 3: pytest-cov + xdist, pip-audit + bandit, pre-commit, uv
+
 ## v0.5.0 (rilis ini)
 - [x] Fix parser teks: apply_patch tanpa old_string nyata tidak di-fire (+9 test text_parser)
 - [x] Fix prosa model auto-fire tool: sinyal negatif niat/hedge (akan/perlu/mungkin) + boost imperatif

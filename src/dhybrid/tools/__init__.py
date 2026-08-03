@@ -19,6 +19,7 @@ def build_tools(
     max_chars = cfg.tool.get("max_output_chars", 8000)
     from dhybrid.tools import (
         ask,
+        documents,
         files,
         git,
         mcp,
@@ -32,7 +33,7 @@ def build_tools(
         web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents):
         mod.register(reg, max_chars=max_chars)
     mcp.register(reg, servers=cfg.tool.get("mcp_servers", []))
     memory.register(reg, max_chars=max_chars, store=memory_store)

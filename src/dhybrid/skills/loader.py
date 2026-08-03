@@ -159,10 +159,28 @@ def select_skills(
 
     forced_hits = [n for n in forced if n in by_name]
     rest: list[tuple[int, Skill]] = []
+    # fuzzy matching (rapidfuzz): typo "debgu" → skill debugging tetap ketemu.
+    # Graceful: kalau rapidfuzz tidak terpasang, jalan seperti dulu.
+    try:
+        from rapidfuzz import fuzz as _fuzz
+    except ImportError:
+        _fuzz = None
     for sk in skills:
         if sk.name in forced_hits:
             continue
         sc = score_skill(sk, pk, hk)
+        if _fuzz is not None:
+            # typo karakter ("debuging" → debugging): partial_ratio pada NAMA;
+            # kemiripan kalimat: token_set_ratio pada deskripsi.
+            fb = max(
+                _fuzz.ratio(prompt.lower(), sk.name),
+                _fuzz.partial_ratio(prompt.lower(), sk.name),
+                _fuzz.token_set_ratio(prompt.lower(), sk.description),
+            )
+            if sc >= min_score and fb >= 85:
+                sc += 1  # relevan + mirip → prioritas naik
+            elif sc < min_score and fb >= 75:
+                sc = min_score  # typo/kemiripan → layak inject
         if sc >= min_score:
             rest.append((sc, sk))
     rest.sort(key=lambda x: -x[0])

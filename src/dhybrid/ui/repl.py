@@ -156,21 +156,47 @@ def repl_loop(ctx) -> int:
         )
     ctx.hooks = _make_hooks(ctx)
 
-    # REPL history (readline stdlib) — panah atas untuk prompt sebelumnya
+    # REPL prompt: prompt_toolkit (TTY) — history search Ctrl-R, autocomplete
+    # /command & nama skill, paste multi-line. Fallback: input() polos untuk
+    # non-TTY (piped: `echo "halo" | dhybrid repl`) supaya scripting tetap jalan.
     history_file = ctx.workspace / "history"
+    pt_session = None
     try:
-        import readline
+        import sys as _sys
 
-        if history_file.exists():
-            readline.read_history_file(history_file)
-        readline.set_history_length(500)
+        if _sys.stdin.isatty():
+            from prompt_toolkit import PromptSession
+            from prompt_toolkit.history import FileHistory
+
+            pt_session = PromptSession(history=FileHistory(str(history_file)))
     except (ImportError, OSError):
-        readline = None
+        pt_session = None
+
+    # daftar kata untuk autocomplete: semua slash-command + nama skill
+    SLASH_COMMANDS = [
+        "/help", "/settings", "/setup", "/key", "/model", "/tokens", "/compact",
+        "/clear", "/sessions", "/skills", "/skill", "/skill off", "/remember",
+        "/rmem", "/forget", "/fmem", "/memories", "/mem", "/search-memory", "/quit",
+    ]
+
+    def _repl_prompt() -> str:
+        nonlocal pt_session
+        if pt_session is not None:
+            from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
+
+            words = list(SLASH_COMMANDS)
+            words += [s.name for s in ctx.all_skills]
+            words += ["/skill " + s.name for s in ctx.all_skills]
+            pt_session.completer = FuzzyCompleter(
+                WordCompleter(sorted(set(words)), ignore_case=True)
+            )
+            return pt_session.prompt(style("dhybrid> ", "32")).strip()
+        return input(style("dhybrid> ", "32")).strip()
 
     try:
         while True:
             try:
-                raw = input(style("dhybrid> ", "32")).strip()
+                raw = _repl_prompt()
             except (EOFError, KeyboardInterrupt):
                 print("\nbye 👋")
                 return 0
@@ -189,11 +215,7 @@ def repl_loop(ctx) -> int:
             except Exception as e:  # noqa: BLE001
                 print(style(f"\n[error] {type(e).__name__}: {e}", "31"))
     finally:
-        if readline is not None:
-            try:
-                readline.write_history_file(history_file)
-            except OSError:
-                pass
+        pass  # try/finally dipertahankan; history disimpan otomatis oleh FileHistory
 
 
 def _recent_user_history(ctx, n: int = 3) -> str:
