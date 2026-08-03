@@ -1,6 +1,6 @@
 # Roadmap
 
-## v0.1.0 (rilis ini)
+## v0.4.1 (rilis ini)
 - [x] CLI repl + one-shot run + resume
 - [x] Multi-provider cloud (OpenAI/Anthropic/OpenRouter/Gemini/Groq/DeepSeek/byNara)
 - [x] 12 teknik hemat token + metering
@@ -9,14 +9,20 @@
 - [x] CI green (ruff 0 error + pytest) via GitHub Actions
 - [x] Provider toggle (enable/disable) di `/settings`
 - [x] Versi sinkron (pyproject == runtime `__version__`, 0.4.1)
+- [x] Tool web: `web_search` (DDG) + `http_request` (retry 429, auth redacted)
+- [x] Slash-command memory di REPL (`/remember`, `/forget`, `/memories`, `/search-memory`)
+- [x] Parser tool-call 5 format + dedupe + `strip_tool_block`
+- [x] Validator `rm -rf` aman (blokir root sistem, `/home`, traversal)
+- [x] 21 skill ter-load (11 baru: web, git, sandbox, database, memory, rag, …)
+- [x] LICENSE MIT + CHANGELOG
 
 ## v0.2.0 — kekuatan
 - [x] MCP tools (adaptor `tools/mcp.py` + preset `mcp_servers` di config)
 - [~] Browser tool — ada `tools/web.py` (fetch HTTP); browser penuh (CDP) belum
 - [x] Multi-workspace & per-project memory (auto-resume sesi per proyek + fakta memori di-inject ke konteks)
-- [ ] Auto skill creation dari sesi sukses (Hermes-style)
+- [x] Fallback escalation yang aman (skip provider disabled / tanpa key valid)
+- [x] Auto skill creation dari sesi sukses (Hermes-style) — `_auto_learn_skill` di repl, guard `auto_skill_worthwhile`, ter-test
 - [ ] `dhybrid init` wizard onboarding
-- [ ] Fallback escalation yang aman (skip provider disabled / tanpa key valid)
 
 ## v0.3.0 — jangkauan
 - [ ] Gateway multi-channel (Telegram/WhatsApp)
