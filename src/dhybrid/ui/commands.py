@@ -312,24 +312,74 @@ def handle_command(cmd: str, ctx) -> bool:
 def _skill_cmd(ctx, arg: str) -> None:
     """/skill <nama> — paksa inject skill tertentu tiap prompt (untuk sesi ini).
     /skill off|none|clear — hapus paksaan (kembali otomatis).
+    /skill ls — daftar semua skill (sama dengan /skills).
+    /skill info <nama> — tampilkan isi skill.
+    /skill rm <nama> — hapus skill WORKSPACE (hasil auto-learn); skill bawaan ditolak.
     /skill — tampilkan paksaan aktif."""
-    if not arg.strip():
+    arg = arg.strip()
+    if not arg:
         if ctx.forced_skills:
             print(style("skill paksa aktif: " + ", ".join(ctx.forced_skills), "36"))
         else:
             print("(tidak ada skill paksa — otomatis berdasarkan relevansi kata kunci)")
         return
-    arg = arg.strip().lower()
-    if arg in ("off", "none", "clear", "reset"):
+    parts = arg.split(maxsplit=1)
+    cmd, rest = parts[0].lower(), (parts[1] if len(parts) > 1 else "").strip()
+    if cmd == "ls":
+        _skills_cmd(ctx, "")
+        return
+    if cmd == "info":
+        if not rest:
+            print(style("pemakaian: /skill info <nama>", "33"))
+            return
+        target = next((s for s in ctx.all_skills if s.name == rest.lower()), None)
+        if not target:
+            print(style(f"skill '{rest}' tidak dikenal — cek /skills", "31"))
+            return
+        print(style(f"=== {target.name} ===", "36"))
+        print(style(f"deskripsi: {target.description}", "1"))
+        print(target.body)
+        return
+    if cmd == "rm":
+        if not rest:
+            print(style("pemakaian: /skill rm <nama>", "33"))
+            return
+        _skill_rm(ctx, rest.lower())
+        return
+    if arg.lower() in ("off", "none", "clear", "reset"):
         ctx.forced_skills = []
         print(style("OK: paksaan skill dihapus — kembali ke otomatis.", "32"))
         return
-    if not any(s.name == arg for s in ctx.all_skills):
+    if not any(s.name == arg.lower() for s in ctx.all_skills):
         print(style(f"skill '{arg}' tidak dikenal — cek /skills", "31"))
         return
-    if arg not in ctx.forced_skills:
-        ctx.forced_skills.append(arg)
-    print(style(f"OK: skill '{arg}' DIPAKSA inject tiap prompt (sampai /skill off).", "32"))
+    if arg.lower() not in ctx.forced_skills:
+        ctx.forced_skills.append(arg.lower())
+    print(style(f"OK: skill '{arg.lower()}' DIPAKSA inject tiap prompt (sampai /skill off).", "32"))
+
+
+def _skill_rm(ctx, name: str) -> None:
+    """Hapus skill — hanya dari workspace (hasil auto-learn), skill bawaan/repo
+    TIDAK boleh dihapus lewat CLI (hindari menghapus skill yang dikelola git)."""
+    target = next((s for s in ctx.all_skills if s.name == name), None)
+    if not target:
+        print(style(f"skill '{name}' tidak dikenal — cek /skills", "31"))
+        return
+    ws_root = (ctx.workspace / "skills").resolve()
+    try:
+        is_workspace = ws_root in target.path.resolve().parents
+    except OSError:
+        is_workspace = False
+    if not is_workspace:
+        print(style(f"skill '{name}' adalah skill bawaan — hapus manual dari {target.path.parent}", "33"))
+        return
+    target.path.unlink(missing_ok=True)
+    try:
+        target.path.parent.rmdir()  # hapus folder skill yang kini kosong
+    except OSError:
+        pass
+    ctx.reload_skills()
+    print(style(f"OK: skill workspace '{name}' dihapus.", "32"))
 
 
 def _skills_cmd(ctx, arg: str) -> None:

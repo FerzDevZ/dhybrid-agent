@@ -190,3 +190,4 @@ skills:
   dir: skills
   max_inject: 3
   max_chars: 800
+  auto_learn: true  # false / DHYBRID_NO_SKILL=1 → matikan skill otomatis

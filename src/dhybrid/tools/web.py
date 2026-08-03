@@ -114,10 +114,24 @@ def _ddg_url(title: str, url: str) -> str:
     return url
 
 
+# Cache web_search per-sesi (TTL 120 detik): query yang sama diulang-ulang
+# agent (pola umum saat looping) tidak perlu hit DDG lagi.
+_SEARCH_CACHE: dict[str, tuple[float, str]] = {}
+_SEARCH_CACHE_TTL = 120.0
+
+
+def _reset_search_cache() -> None:
+    _SEARCH_CACHE.clear()
+
+
 def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
     """Cari dengan DuckDuckGo HTML → top-N title+snippet (tanpa API key)."""
     if not query.strip():
         return "ERROR: query kosong"
+    key = f"{query.strip()}|{n}"
+    cached = _SEARCH_CACHE.get(key)
+    if cached and (time.monotonic() - cached[0]) < _SEARCH_CACHE_TTL:
+        return cached[1]
     q = urllib.parse.urlencode({"q": query, "kl": "us-en", "df": "y"})
     url = f"https://html.duckduckgo.com/html/?{q}"
     try:
@@ -139,7 +153,9 @@ def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
     summary = f"Search: {query}\n\n" + "\n".join(out_parts)
     if not results:
         summary += "\n(tidak ada hasil — DDG mungkin blokir atau query spesifik)"
-    return summary[:8000]
+    summary = summary[:8000]
+    _SEARCH_CACHE[key] = (time.monotonic(), summary)
+    return summary
 
 
 def http_request(

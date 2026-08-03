@@ -4,6 +4,44 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-08-03
+
+### Diperbaiki
+- **apply_patch dari parser teks mengirim `old_string="<<PLACEHOLDER>>"`** yang
+  dijamin gagal → error palsu & noise nudge/escalation. Sekarang HANYA pola
+  dua-sisi ("ganti X menjadi Y di file Z") yang memicu apply_patch; tanpa
+  old_string nyata, tool tidak di-fire. Modul text_parser (191 baris, auto-fire
+  tool) kini punya test sendiri (9 unit test).
+- **Prosa model bisa auto-fire write_file** — kalimat niat/hedge ("saya AKAN
+  buat...", "perlu buat...", "mungkin...") di-penalty confidence ×0.4; perintah
+  imperatif di awal kalimat ("Buatkan file X...") di-boost; ambang aman tanpa
+  mengorbankan perintah read/grep/list.
+- **Auto-skill kontaminasi antar-run** — `tool_count` di-reset tiap awal run
+  (`registry.reset_counts()`), jadi prompt receh di run ke-2 tidak menumpang
+  tool run ke-1 untuk lahir jadi skill.
+- **Jawaban user (ask_user) diproses sebagai prompt mentah** — bisa memicu
+  nudge build & parsing. Sekarang di-push sebagai pesan biasa
+  (`push_prompt=False`), tidak di-parse/di-nudge/di-double-push.
+- **Prosa model dibuang saat tool block ter-parse** (`text=""`) — sekarang
+  `strip_tool_block` membersihkan markup saja, penjelasan model tetap masuk
+  riwayat.
+- **ask_user boros 1 model call** — loop pause LANGSUNG setelah tool ask_user
+  dieksekusi, tanpa call tambahan (test `steps == 1`).
+
+### Ditambahkan
+- `dhybrid doctor` diperluas: cek chain eskalasi (preset mati terdeteksi —
+  menemukan chain user 0/3 hidup), cek allowlist tool inti keblokir, cek
+  skill bawaan vs workspace (flag sampah ≥ 5).
+- `/skill ls | info <nama> | rm <nama>` — hapus hanya skill workspace
+  (auto-learn), skill bawaan ditolak.
+- `DHYBRID_DEBUG=1` → dump konteks & hasil run ke `~/.dhybrid/debug/` JSON.
+- Failover chain saat error beruntun TANPA router (coba preset chain berikutnya).
+- `dhybrid run --json` — output JSON terstruktur (final_text, skor, token, biaya).
+- Cache `web_search` per sesi (TTL 120 detik) — query berulang tidak hit DDG lagi.
+- Toggle auto-skill: `skills.auto_learn: false` di config atau `DHYBRID_NO_SKILL=1`.
+- 5 skill baru: `laravel-scaffold`, `free-model-survival`, `context-engineering`,
+  `token-budget-debugging`, `session-hygiene` (total 31).
+
 ## [0.4.3] - 2026-08-03
 
 ### Diperbaiki

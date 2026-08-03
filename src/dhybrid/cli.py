@@ -36,6 +36,27 @@ def cmd_repl(args) -> int:
 def cmd_run(args) -> int:
     # one-shot: non-interaktif — tool ask_user diblokir, agent pilih default sendiri
     ctx = _build_context(args, interactive=False)
+    if getattr(args, "json", False):
+        import json
+
+        result = run_agent(ctx, args.prompt)
+        payload = {
+            "session": ctx.sid,
+            "model": ctx.model_cfg.model,
+            "provider": ctx.model_cfg.provider,
+            "final_text": result.final_text,
+            "quality_score": result.quality_score,
+            "files_created": result.files_created,
+            "tests_passed": result.tests_passed,
+            "stopped_early": result.stopped_early,
+            "escalated": result.escalated,
+            "escalation_count": result.escalation_count,
+            "steps": result.steps,
+            "token_used": ctx.budget.used,
+            "cost_usd": round(ctx.last_cost, 6),
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        return 0
     print(f"dhybrid: {ctx.current_model_label()}")
     result = run_agent(ctx, args.prompt)
     print()
@@ -164,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="mulai sesi BARU (jangan auto-resume sesi terakhir di proyek ini)")
     run = sub.add_parser("run", help="satu prompt sekali jalan")
     run.add_argument("prompt")
+    run.add_argument("--json", action="store_true",
+                     help="output JSON terstruktur (final_text, skor, token, biaya)")
     tok = sub.add_parser("tokens", help="dashboard token & biaya")
     tok.add_argument("session_id", nargs="?", default=None)
     res = sub.add_parser("resume", help="lanjutkan sesi lama (via ringkasan)")

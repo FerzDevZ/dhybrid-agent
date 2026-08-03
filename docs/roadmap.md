@@ -1,6 +1,23 @@
 # Roadmap
 
-## v0.4.3 (rilis ini)
+## v0.5.0 (rilis ini)
+- [x] Fix parser teks: apply_patch tanpa old_string nyata tidak di-fire (+9 test text_parser)
+- [x] Fix prosa model auto-fire tool: sinyal negatif niat/hedge (akan/perlu/mungkin) + boost imperatif
+- [x] Fix kontaminasi auto-skill antar-run: tool_count di-reset per run
+- [x] Fix jawaban ask_user: pesan biasa (push_prompt=False), tidak di-parse/di-nudge
+- [x] Fix prosa model dibuang saat tool block: strip markup, prosa tetap di riwayat
+- [x] Fix ask_user boros call: pause langsung setelah eksekusi tool
+- [x] doctor diperluas: cek chain mati, allowlist keblokir, skill workspace sampah
+- [x] /skill ls | info | rm (rm hanya skill workspace)
+- [x] DHYBRID_DEBUG=1 dump konteks+hasil ke ~/.dhybrid/debug/
+- [x] Failover chain saat error beruntun tanpa router
+- [x] dhybrid run --json (output terstruktur untuk scripting)
+- [x] Cache web_search per sesi (TTL 120 dtk)
+- [x] Toggle auto-skill: config skills.auto_learn / DHYBRID_NO_SKILL=1
+- [x] 5 skill baru: laravel-scaffold, free-model-survival, context-engineering, token-budget-debugging, session-hygiene (total 31)
+- [x] 205 test lulus, ruff 0 error, versi sinkron 0.5.0
+
+## v0.4.3
 - [x] Fix "DONE tanpa kerja": BUILD_VERBS diperluas (kerjakan/setup/install/perbaiki/dll)
 - [x] Fix "lanjutkan": warisi konteks membangun dari riwayat sesi
 - [x] Fix klaim "selesai" tanpa bukti → di-nudge EVIDENCE_MSG sampai max_nudges

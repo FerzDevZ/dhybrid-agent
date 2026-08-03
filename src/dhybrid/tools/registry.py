@@ -53,3 +53,8 @@ class ToolRegistry:
             return f"ERROR argumen {name}: {e}"
         except Exception as e:  # noqa: BLE001
             return f"ERROR {name}: {type(e).__name__}: {e}"
+
+    def reset_counts(self) -> None:
+        """Kosongkan penghitung pemakaian tool — dipanggil tiap awal run agent
+        supaya auto-skill hanya melihat tool run INI, bukan akumulasi sesi."""
+        self.tool_count = {}

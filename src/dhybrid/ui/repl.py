@@ -15,8 +15,12 @@ from dhybrid.ui.status import (
 )
 
 
-def run_agent(ctx, prompt: str) -> LoopResult:
-    """Jalankan satu task agent; kembalikan hasil (termasuk skor kualitas)."""
+def run_agent(ctx, prompt: str, push_prompt: bool = True) -> LoopResult:
+    """Jalankan satu task agent; kembalikan hasil (termasuk skor kualitas).
+
+    push_prompt=False dipakai untuk meneruskan jawaban user (ask_user) yang
+    sudah di-push manual sebagai pesan biasa — jawaban TIDAK boleh diproses
+    sebagai prompt (tidak di-parse tool-call, tidak memicu nudge build)."""
     # Saring chain escalation: hanya preset yang provider-nya enabled & resolvable.
     # Cegah 401/431: buang preset yang key-nya kosong (kecuali route gratis opencode-zen).
     raw_chain = ctx.model_cfg.chain or []
@@ -56,7 +60,7 @@ def run_agent(ctx, prompt: str) -> LoopResult:
         client_factory=_client_factory if chain else None,
         ask_state=ctx.ask_state,
     )
-    result = loop.run(prompt, ctx.system_prompt)
+    result = loop.run(prompt, ctx.system_prompt, push_prompt=push_prompt)
 
     # simpan ke sesi (prompt kosong = kelanjutan jawaban user, tidak disimpan ganda)
     if prompt.strip():
@@ -269,7 +273,12 @@ def _run_one(ctx, raw: str) -> None:
                 i = int(answer)
                 if 1 <= i <= len(opts):
                     answer = opts[i - 1]
-            result = run_agent(ctx, f"[jawaban user] {answer}")
+            # jawaban user = PESAN biasa, bukan prompt: tidak di-parse tool-call,
+            # tidak dicocokkan skill, tidak memicu nudge build.
+            from dhybrid.llm.base import ChatMessage
+
+            ctx.ctx.push(ChatMessage(role="user", content=f"[jawaban user] {answer}"))
+            result = run_agent(ctx, "", push_prompt=False)
     finally:
         ctx.hooks.on_delta = orig_delta
     final = result.final_text
@@ -303,7 +312,14 @@ def _run_one(ctx, raw: str) -> None:
     # Auto-skill: sesi task nyata otomatis jadi skill (tanpa tanya manual).
     # Hanya bila ada KARYA nyata (file dibuat / tool mutasi / test dijalankan) —
     # sapaan & eksplorasi ("haloo?", "lanjutkan") tidak menghasilkan skill.
-    _auto_learn_skill(ctx, raw, final, result)
+    # Matikan: config skills.auto_learn=false atau env DHYBRID_NO_SKILL=1.
+    if ctx.cfg.skills.get("auto_learn", True) and not os.environ.get("DHYBRID_NO_SKILL"):
+        _auto_learn_skill(ctx, raw, final, result)
+
+    # Debug dump: DHYBRID_DEBUG=1 → simpan konteks & hasil run ke file
+    # (~/.dhybrid/debug/) untuk reproduksi masalah model/tool.
+    if os.environ.get("DHYBRID_DEBUG"):
+        _dump_debug(ctx, raw, result)
 
 
 # Prompt receh yang tidak pernah layak jadi skill, apa pun hasilnya
@@ -345,6 +361,46 @@ def _auto_learn_skill(ctx, raw: str, final: str, result=None) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(md)
     print(style(f"  [skill otomatis] {name} → {target}", "90"))
+
+
+def _dump_debug(ctx, raw: str, result) -> None:
+    """Simpan konteks + hasil run ke ~/.dhybrid/debug/ saat DHYBRID_DEBUG=1 —
+    untuk reproduksi masalah prompt/model/tool tanpa harus menyalin terminal."""
+    import json
+    import time
+
+    debug_dir = ctx.workspace / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    path = debug_dir / f"{ts}_{ctx.sid}.json"
+    payload = {
+        "session": ctx.sid,
+        "prompt": raw,
+        "model": ctx.model_cfg.model,
+        "provider": ctx.model_cfg.provider,
+        "result": {
+            "final_text": getattr(result, "final_text", ""),
+            "quality_score": getattr(result, "quality_score", None),
+            "files_created": getattr(result, "files_created", None),
+            "tests_passed": getattr(result, "tests_passed", None),
+            "stopped_early": getattr(result, "stopped_early", None),
+            "escalated": getattr(result, "escalated", None),
+            "steps": getattr(result, "steps", None),
+            "budget_used": getattr(result, "budget_used", None),
+            "compacted": getattr(result, "compacted", None),
+        },
+        "tool_count": ctx.tools.tool_count,
+        "messages": [
+            {
+                "role": m.role,
+                "content": (m.content or "")[:2000],
+                "tool_calls": getattr(m, "tool_calls", None),
+            }
+            for m in ctx.ctx.messages
+        ],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    print(style(f"[debug] dump: {path}", "90"))
 
 
 def _make_hooks(ctx) -> Hooks:

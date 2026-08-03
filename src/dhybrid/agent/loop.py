@@ -338,7 +338,9 @@ class AgentLoop:
             calls = extract_tool_calls_from_text(text)
             if calls:
                 tool_calls = calls
-                text = ""  # mode teks: simpan teks, buang blok tool (sudah di-parse)
+                # mode teks: simpan PROSA (tanpa markup tool), jangan dibuang —
+                # penjelasan model tetap masuk riwayat supaya konteks konsisten.
+                text = strip_tool_block(text)
                 fallback = True
         return ChatResponse(
             message=ChatMessage(role="assistant", content=text, tool_calls=tool_calls or None),
@@ -347,8 +349,9 @@ class AgentLoop:
             fallback_tool_call=fallback,
         )
 
-    def run(self, user_prompt: str, system_prompt: str) -> LoopResult:
-        self.ctx.push(ChatMessage(role="user", content=user_prompt))
+    def run(self, user_prompt: str, system_prompt: str, push_prompt: bool = True) -> LoopResult:
+        if push_prompt:
+            self.ctx.push(ChatMessage(role="user", content=user_prompt))
         result = LoopResult()
         client = self._pick_client(user_prompt)
         errors = 0
@@ -359,6 +362,9 @@ class AgentLoop:
         before_files = snapshot_files(self.cwd)
         last_snapshot = before_files
         self.tool_events = []
+        # hitungan tool per-RUN: auto-skill & verifier hanya melihat run ini,
+        # bukan akumulasi sesi (cegah kontaminasi antar-prompt di REPL)
+        self.tools.reset_counts()
 
         for step in range(self.cfg.max_steps):
             # 1) kompaksi saat budget lunak tercapai
@@ -560,6 +566,9 @@ class AgentLoop:
                             content=f"[Hasil tool '{tc['name']}']\n{output}",
                         )
                     )
+                    # ask_user → pause LANGSUNG (tanpa model call tambahan)
+                    if self._maybe_pause_for_user(result, last_text):
+                        return result
             else:
                 # MODE NATIVE: protokol tool_calls + role:tool (OpenAI/Anthropic)
                 self.ctx.push(
@@ -576,18 +585,26 @@ class AgentLoop:
                     self.ctx.push(
                         ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
                     )
+                    # ask_user → pause LANGSUNG (tanpa model call tambahan)
+                    if self._maybe_pause_for_user(result, last_text):
+                        return result
 
             # 4b) ask_user dipanggil → hentikan loop, REPL akan tanya user & lanjut
             if self._maybe_pause_for_user(result, last_text):
                 return result
 
             # 5) eskalasi cheap-first: model kecil gagal → model besar
-            if (
-                self.router is not None
-                and errors >= self.cfg.escalate_after_errors
-                and not result.escalated
-            ):
-                client = self._pick_client(user_prompt, force="big")
+            if errors >= self.cfg.escalate_after_errors and not result.escalated:
+                if self.router is not None:
+                    client = self._pick_client(user_prompt, force="big")
+                else:
+                    # tanpa router: coba preset berikutnya di escalation_chain
+                    # (failover provider saat error beruntun, bukan cuma kualitas)
+                    nxt = self._next_valid_escalation()
+                    if nxt is not None:
+                        client = nxt[1]
+                        result.escalated_quality = True
+                        result.escalation_count = self._n_escalations
                 result.escalated = True
                 errors = 0
 

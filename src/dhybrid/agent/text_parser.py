@@ -22,8 +22,10 @@ FILE_READ_PATTERNS = [
 ]
 
 FILE_EDIT_PATTERNS = [
-    r"(?:edit|ubah|ubah|ganti|replace|modify)\s+(?:file\s+)?[`\"']?([\w\/\.\-]+\.\w+)[`\"']?\s*(?:dengan|menjadi|to)\s*[`\"']?([\s\S]*?)[`\"']?(?:\s*$|\s*\.)",
-    r"(?:ganti|replace)\s+[`\"']?([\s\S]*?)[`\"']?\s+(?:dengan|menjadi|to)\s*[`\"']?([\s\S]*?)[`\"']?\s+(?:di|pada|in)\s+[`\"']?([\w\/\.\-]+\.\w+)[`\"']?",
+    # HANYA dua-sisi: old DAN new harus ada, plus lokasi file — kalau tidak ada
+    # old_string yang nyata, apply_patch TIDAK boleh di-fire (dulu dikirim
+    # "<<PLACEHOLDER>>" yang dijamin gagal → error palsu & nudge/escalation noise).
+    r"(?:ganti|replace|ubah)\s+[`\"']?([\s\S]*?)[`\"']?\s+(?:dengan|menjadi|to)\s+[`\"']?([\s\S]*?)[`\"']?\s+(?:di|pada|in)\s+[`\"']?([\w\/\.\-]+\.\w+)[`\"']?",
 ]
 
 COMMAND_PATTERNS = [
@@ -97,6 +99,19 @@ class TextToToolParser:
         for kw in keywords.get(tool_name, []):
             if kw in match.group(0).lower():
                 base += 0.1
+        # Boost perintah imperatif di awal: "Buatkan file X ..." = eksekusi jelas.
+        # Kalau didahului prosa/penjelasan, bukan perintah langsung.
+        prefix = text[: match.start()].strip().lower()
+        if not prefix or prefix.split()[-1] in ("tolong", "mohon", "please", "plis", "ya"):
+            base += 0.3
+        # Sinyal NEGATIF: niat/hedge/belum eksekusi ("saya AKAN buat", "perlu buat",
+        # "mungkin", "rencana"...) → jangan auto-fire tool dari prosa.
+        window = text[max(0, match.start() - 60) : match.end()].lower()
+        if any(sig in window for sig in (
+            "akan", "rencana", "nanti", "nantinya", "mau", "ingin", "berencana",
+            "perlu", "butuh", "harus", "sebaiknya", "seharusnya", "mungkin", "harap",
+        )):
+            base *= 0.4
         return min(base, 0.95)
     
     # Parser functions
@@ -119,12 +134,13 @@ class TextToToolParser:
     
     def _parse_apply_patch(self, match: re.Match) -> dict | None:
         groups = match.groups()
-        if len(groups) >= 2:
-            path = groups[0].strip().strip('`"\'')
-            new_content = groups[1].strip().strip('`"\'')
-            if path:
-                # For apply_patch we need old_content - approximate with placeholder
-                return {"path": path, "old_string": "<<PLACEHOLDER>>", "new_string": new_content}
+        if len(groups) >= 3:
+            old_string = groups[0].strip().strip('`"\'')
+            new_string = groups[1].strip().strip('`"\'')
+            path = groups[2].strip().strip('`"\'')
+            # wajib old_string NYATA — tanpa itu apply_patch dijamin gagal
+            if path and old_string and new_string:
+                return {"path": path, "old_string": old_string, "new_string": new_string}
         return None
     
     def _parse_terminal(self, match: re.Match) -> dict | None:
@@ -152,10 +168,13 @@ class TextToToolParser:
 
 def extract_tool_calls_from_text(text: str, min_confidence: float = 0.5) -> list[dict]:
     """Entry point: parse text → list tool call dicts.
-    
+
     Supports two formats:
     1. Natural language: "buat file test.py dengan isi print('hello')"
     2. Legacy tool blocks: ```tool {"name": "grep", "arguments": {"q": "x"}} ```
+
+    Keamanan: kalimat niat/hedge ("saya AKAN buat...", "perlu buat...") di-penalty
+    oleh `_calculate_confidence`, jadi prosa model TIDAK auto-fire write_file.
     """
     # First try legacy tool block format
     from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls

@@ -49,13 +49,20 @@ dhybrid run "perbaiki bug di calc.py lalu jalankan test"
 dhybrid --cwd /path/proyek repl  # kerja di proyek lain
 dhybrid tokens                   # dashboard token & biaya semua sesi
 dhybrid resume <session_id>      # lanjutkan sesi lama
+dhybrid run --json "cek repo"    # output JSON terstruktur (scripting/CI)
+dhybrid doctor                   # diagnosa config, key, chain, allowlist, skill
 ```
 
 ### Command REPL
 
 ```
-/help  /model [preset]  /tokens  /compact  /clear  /sessions  /skills  /skill <nama>  /quit
+/help  /model [preset]  /tokens  /compact  /clear  /sessions  /skills  /skill <nama|ls|info|rm>  /quit
 ```
+
+`/skill rm <nama>` hanya menghapus skill workspace (hasil auto-learn); skill
+bawaan ditolak. Auto-skill bisa dimatikan: `skills.auto_learn: false` di config
+atau `DHYBRID_NO_SKILL=1`. Debug: `DHYBRID_DEBUG=1` menyimpan dump konteks &
+hasil tiap run ke `~/.dhybrid/debug/`.
 
 ## Konfigurasi
 

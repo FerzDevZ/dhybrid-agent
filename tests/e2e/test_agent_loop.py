@@ -127,6 +127,60 @@ def test_loop_pauses_for_ask_user():
         "options": ["Django", "Flask"],
     }
     assert state.pending is None  # pertanyaan sudah diambil loop untuk REPL
+    assert res.steps == 1  # B6: pause LANGSUNG setelah ask_user, tanpa model call tambahan
+
+
+def test_tool_count_reset_per_run():
+    """B3: tool_count di-reset tiap awal run — auto-skill tidak melihat
+    akumulasi sesi (run ke-2 yang receh tidak bisa 'menumpang' run ke-1)."""
+    reg = ToolRegistry()
+    reg.register("write_file", "tulis", {"path": {"type": "string"}}, lambda **kw: "ok")
+    ctxm = ContextManager()
+    l1 = AgentLoop(
+        ScriptedClient(["tool:write_file:x", "text:selesai"]),
+        reg, ctxm, TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD,
+    )
+    l1.run("buatkan file a", "sys")
+    assert reg.tool_count.get("write_file", 0) == 1
+    l2 = AgentLoop(
+        ScriptedClient(["text:selesai"]),
+        reg, ctxm, TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD,
+    )
+    l2.run("udah", "sys")
+    assert reg.tool_count.get("write_file", 0) == 0  # reset di awal run
+
+
+def test_prepushed_answer_not_double_pushed():
+    """B4: jawaban user yang di-push manual sebagai pesan tidak di-double-push
+    oleh loop (push_prompt=False), dan tidak memicu nudge build."""
+    ctxm = ContextManager()
+    ctxm.push(ChatMessage(role="user", content="[jawaban user] ya pakai flask"))
+    loop = AgentLoop(
+        ScriptedClient(["text:ok, lanjut"]),
+        _tools(), ctxm, TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD,
+    )
+    res = loop.run("", "sys", push_prompt=False)
+    users = [m for m in ctxm.messages if m.role == "user"]
+    assert len(users) == 1
+    assert res.final_text == "ok, lanjut"
+
+
+def test_fallback_keeps_prose_in_context():
+    """B5: mode teks — prosa model dipertahankan di riwayat (dulu dibuang
+    text=''), hanya markup tool yang dibersihkan."""
+    ctxm = ContextManager()
+    block = '```tool\n{"name": "grep", "arguments": {"q": "err"}}\n```'
+    loop = AgentLoop(
+        ScriptedClient([f"text:saya cek dulu\n{block}"]),
+        _tools(), ctxm, TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD,
+    )
+    loop.run("cari error", "sys")
+    prose = [
+        m.content for m in ctxm.messages
+        if m.role == "assistant" and "cek dulu" in (m.content or "")
+    ]
+    assert prose, "prosa model harus masuk riwayat, bukan dibuang"
+    assert "```tool" not in prose[0]  # markup tool dibersihkan, prosa tetap
 
 
 def test_loop_continuation_inherits_build_context():
