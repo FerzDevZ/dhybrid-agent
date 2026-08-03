@@ -4,6 +4,20 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.8.2] - 2026-08-03
+
+### Baris DONE jujur — tidak ada lagi "DONE — kualitas 100/100 · 0 file"
+
+Bug: saat loop berhenti karena `max_steps` habis (model lemah yang cuma recon
+terminal tanpa membuat file), `files_created` & `quality_score` TIDAK pernah
+dihitung → tampil default `0 file · kualitas 100/100` yang menyesatkan.
+Fix:
+- Jalur berhenti mana pun (early-stop ATAU max_steps habis) kini memakai satu
+  pengukur yang sama (`_measure_output`): bukti file, status test, skor jujur.
+- Build yang berhenti tanpa bukti file → `stopped_early=True` → baris ringkasan
+  berlabel **STUCK** (bukan DONE) + catatan "(belum ada bukti file dibuat)".
+- Skor rendah otomatis memicu escalation chain bila ada (model kuat cadangan).
+
 ## [0.8.1] - 2026-08-03
 
 ### Pertanyaan clarify digenerate AI — natural & selalu bervariasi

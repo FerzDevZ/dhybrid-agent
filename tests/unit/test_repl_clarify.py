@@ -15,6 +15,7 @@ def _stub_result():
         tests_passed=None,
         escalation_count=0,
         escalated_quality=False,
+        stopped_early=False,
         quality_score=100,
         files_created=0,
     )

@@ -316,6 +316,37 @@ class AgentLoop:
                 return True
         return False
 
+    def _measure_output(
+        self, user_prompt: str, last_text: str, before_files: set[str]
+    ) -> tuple[dict, bool, int]:
+        """Ukur hasil build: bukti file, status test, skor kualitas.
+
+        Dipakai di SEMUA jalur berhenti (early-stop ATAU max_steps habis) supaya
+        baris DONE tidak membohongi: kualitas 100/100 & 0 file tidak pernah
+        muncul bersamaan (dulu jalur max_steps tidak menghitung sama sekali →
+        quality_score default 100 padahal tidak ada file dibuat).
+        """
+        v = verify_build(self.cwd, before_files, snapshot_files(self.cwd), self.tool_events)
+        is_build = _is_build_request(user_prompt)
+        # 'lanjutkan'/'ya' dst → warisi konteks membangun dari riwayat sesi,
+        # supaya klaim selesai tanpa bukti tetap ditolak.
+        if not is_build and _is_continuation(user_prompt):
+            recent = [
+                m.content or ""
+                for m in self.ctx.messages[-10:]
+                if m.role == "user" and not (m.content or "").lstrip().startswith("[")
+            ]
+            if any(_is_build_request(u) for u in recent):
+                is_build = True
+        score = score_output(
+            last_text,
+            is_build=is_build,
+            tools_used=len(self.tool_events),
+            files_created=v["files_created"],
+            tests_passed=v["tests_passed"],
+        )
+        return v, is_build, score
+
     def _finalize_response(self, last_text: str, result: LoopResult) -> str:
         """Bersihkan markup tool & pastikan jawaban final TIDAK kosong.
 
@@ -469,25 +500,7 @@ class AgentLoop:
             # atau (b) tanpa menghasilkan perubahan file apa pun. Kalau itu terjadi → escalate/nudge.
             if not resp.message.tool_calls:
                 # measure kualitas + bukti nyata (file/test) untuk keputusan
-                v = verify_build(self.cwd, before_files, snapshot_files(self.cwd), self.tool_events)
-                is_build = _is_build_request(user_prompt)
-                # 'lanjutkan'/'ya' dst → warisi konteks membangun dari riwayat sesi,
-                # supaya klaim selesai tanpa bukti tetap ditolak.
-                if not is_build and _is_continuation(user_prompt):
-                    recent = [
-                        m.content or ""
-                        for m in self.ctx.messages[-10:]
-                        if m.role == "user" and not (m.content or "").lstrip().startswith("[")
-                    ]
-                    if any(_is_build_request(u) for u in recent):
-                        is_build = True
-                score = score_output(
-                    last_text,
-                    is_build=is_build,
-                    tools_used=len(self.tool_events),
-                    files_created=v["files_created"],
-                    tests_passed=v["tests_passed"],
-                )
+                v, is_build, score = self._measure_output(user_prompt, last_text, before_files)
                 result.quality_score = score
                 result.files_created = v["files_created"]
                 result.tests_passed = v["tests_passed"]
@@ -672,6 +685,19 @@ class AgentLoop:
                 self.hooks.finish(result)
                 return result
 
+        # max_steps habis — ukur JUJUR: kualitas & bukti file harus dihitung,
+        # bukan default 100/100 & 0 file (bug: baris DONE membohongi).
+        v, is_build, score = self._measure_output(user_prompt, last_text, before_files)
+        result.files_created = v["files_created"]
+        result.tests_passed = v["tests_passed"]
+        result.quality_score = score
+        evidence = (
+            v["files_created"] > 0
+            or v["tests_passed"] is True
+            or self._used_mutating_tool()
+        )
+        if is_build and not evidence:
+            result.stopped_early = True  # build dipaksa berhenti tanpa bukti → jujur
         result.final_text = self._finalize_response(last_text, result)
         self.hooks.finish(result)
         return result

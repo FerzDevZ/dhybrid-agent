@@ -391,10 +391,13 @@ def _run_one(ctx, raw: str) -> None:
     esc_msg = ""
     if result.escalated_quality:
         esc_msg = " (escalation: model → kuat)"
+    if result.stopped_early:
+        esc_msg += " (belum ada bukti file dibuat)"
     from dhybrid.ui.rich_ui import print_done
 
+    label = " STUCK" if result.stopped_early else " DONE"
     print_done(
-        f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
+        f"{label} — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "
         f"· test {tmark}"
