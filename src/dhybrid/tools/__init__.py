@@ -33,12 +33,14 @@ def build_tools(
         terminal,
         tests,
         todo,
+        vision,
         web,
     )
 
     for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, project_memory):
         mod.register(reg, max_chars=max_chars)
     browser_tool.register(reg)
+    vision.register(reg)
     mcp.register(reg, servers=cfg.tool.get("mcp_servers", []))
     memory.register(reg, max_chars=max_chars, store=memory_store)
     subagents.register(reg, max_chars=max_chars, client_factory=client_factory)

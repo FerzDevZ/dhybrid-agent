@@ -2,21 +2,38 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
+
+
+def text_part(text: str) -> dict:
+    """Part teks untuk pesan multimodal."""
+    return {"type": "text", "text": text}
+
+
+def image_part(path: str | Path) -> dict:
+    """Part gambar (data URI base64) untuk pesan multimodal — format
+    OpenAI-compatible; didukung byNara/OpenAI/OpenRouter/Gemini dll."""
+    p = Path(path)
+    mime = mimetypes.guess_type(str(p))[0] or "image/png"
+    data = base64.b64encode(p.read_bytes()).decode()
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
 
 
 @dataclass
 class ChatMessage:
     role: str  # system | user | assistant | tool
-    content: str
+    content: str | list  # str teks, atau list of parts (text_part/image_part)
     tool_calls: list | None = None  # [{"id","name","arguments"(dict)}]
     tool_call_id: str | None = None
 
     def to_api(self) -> dict:
-        """Format OpenAI-compatible."""
+        """Format OpenAI-compatible. content list (multimodal) diteruskan apa adanya."""
         d: dict = {"role": self.role, "content": self.content}
         if self.tool_calls:
             d["tool_calls"] = [

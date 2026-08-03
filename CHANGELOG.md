@@ -4,6 +4,34 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-08-03
+
+### Agent sekarang bisa MELIHAT + menerima paste apa pun
+
+- **Tool `read_image` — baca gambar/screenshot jadi teks.** Dua jalur,
+  tidak bergantung penuh pada API key:
+  1. Vision LLM (utama) — default byNara (OpenAI-compatible,
+     router.bynara.id/v1, `BYNARA_API_KEY`; model = model utama yang aktif).
+     Override env: `DHYBRID_VISION_PROVIDER` / `DHYBRID_VISION_MODEL` /
+     `DHYBRID_VISION_BASE_URL` / `DHYBRID_VISION_API_KEY_ENV`.
+  2. OCR lokal (tanpa API key sama sekali) — `rapidocr-onnxruntime`
+     (ONNX, tanpa torch) → pytesseract → pesan ramah. Pasang: `pip install -e '.[vision]'`.
+- **ChatMessage multimodal** (`llm/base.py`): `content` kini bisa list of
+  parts (`text_part`/`image_part` data-URI). OpenAI-compatible client
+  meneruskan apa adanya; AnthropicClient mengonversi ke blok image base64.
+  Ini juga membuka jalan: agent bisa kirim gambar ke model kapan pun.
+- **`/shot [nama]`** — screenshot layar penuh (ImageMagick `import`) ke
+  `~/.dhybrid/captures/`, siap dibaca `read_image`. Bug UI/visual cukup
+  di-screenshot, tidak perlu dijelaskan pakai kata-kata.
+- **`/paste [nama]`** — mode tempel multi-baris (selesai Ctrl+D / baris
+  titik): otomatis tersimpan ke `~/.dhybrid/pastes/<nama>.txt` DAN di-inject
+  ke konteks agent sebagai pesan user — paste error/log/bukti sesi sekali
+  tempel, agent langsung paham tanpa markup rusak.
+- Allowlist default 28 → 29 tool (`read_image`). Extra baru `vision`.
+- **271 test lulus**, ruff 0, coverage 67.1% (gate 65). OCR lokal
+  terverifikasi nyata tanpa key: teks "Login gagal: 401 Unauthorized"
+  terbaca dari gambar yang dibuat on-the-fly.
+
 ## [0.6.0] - 2026-08-03
 
 ### Fitur baru: 8 paket pendukung (eksekusi penuh "Kerjakan Semuanya")

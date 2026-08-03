@@ -161,6 +161,27 @@ class OpenAICompatClient(LLMClient):
         )
 
 
+def _to_anthropic_content(content: str | list) -> str | list:
+    """content multimodal (text_part/image_part) → blok Anthropic.
+
+    image_url data URI → {"type":"image","source":{base64, media_type, data}}."""
+    if isinstance(content, str):
+        return content
+    blocks: list[dict] = []
+    for part in content:
+        if part.get("type") == "text":
+            blocks.append({"type": "text", "text": part.get("text", "")})
+        elif part.get("type") == "image_url":
+            url = (part.get("image_url") or {}).get("url", "")
+            if url.startswith("data:"):
+                meta, _, b64 = url.partition(",")
+                mime = meta[5:].split(";")[0] or "image/png"
+                blocks.append(
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+                )
+    return blocks or content
+
+
 class AnthropicClient(LLMClient):
     """Adaptor native Anthropic. System prompt diberi cache_control ephemeral
     → prompt caching otomatis (hemat input token antar turn)."""
@@ -215,7 +236,7 @@ class AnthropicClient(LLMClient):
                     }
                 )
             else:
-                out.append({"role": m.role, "content": m.content})
+                out.append({"role": m.role, "content": _to_anthropic_content(m.content)})
         # cache_control hanya valid di blok TERAKHIR dari system
         if system_blocks:
             system_blocks[-1]["cache_control"] = {"type": "ephemeral"}

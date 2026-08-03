@@ -67,6 +67,8 @@ MENU LENGKAP — pilih dengan prefix / :
   📂 /compact            ringkas konteks (pesan lama)
   📂 /clear              reset konteks percakapan
   📂 /sessions           daftar sesi sebelumnya
+  📸 /shot [nama]        screenshot layar → ~/.dhybrid/captures/ (agent bisa baca via read_image)
+  📋 /paste [nama]       tempel teks panjang → file .txt + langsung masuk konteks agent
   🧠 /skills             daftar skill yang tersedia
   🎯 /skill <nama>       paksa pakai skill tertentu tiap prompt (off = kembali otomatis)
   💾 /remember <k> <v>  simpan fakta jangka panjang
@@ -232,6 +234,73 @@ def cmd_key(ctx, arg: str) -> None:
     print(style(f"OK: {env} disimpan di {p} — langsung aktif.", "32"))
 
 
+def cmd_shot(ctx, arg: str) -> None:
+    """/shot [nama] — screenshot layar penuh (ImageMagick import) ke captures/."""
+    import subprocess
+    from datetime import datetime
+
+    cap_dir = Path.home() / ".dhybrid" / "captures"
+    cap_dir.mkdir(parents=True, exist_ok=True)
+    name = (arg.strip() or datetime.now().astimezone().strftime("%Y%m%d-%H%M%S"))
+    if not name.lower().endswith((".png", ".jpg")):
+        name += ".png"
+    out = cap_dir / name
+    try:
+        subprocess.run(
+            ["import", "-window", "root", str(out)],
+            check=True, capture_output=True, timeout=30,
+        )
+    except FileNotFoundError:
+        print(style("ERROR: ImageMagick 'import' tidak ada — install: sudo apt install imagemagick", "31"))
+        return
+    except subprocess.CalledProcessError as e:
+        err = (e.stderr or b"").decode(errors="replace").strip()
+        print(style(f"ERROR screenshot: {err or e}", "31"))
+        return
+    print(style(f"OK: {out}", "32"))
+    print("lalu minta agent baca: read_image path=" + str(out) + "  (atau ketik prompt biasa, agent bisa pakai sendiri)")
+
+
+def cmd_paste(ctx, arg: str) -> None:
+    """/paste [nama] — tempel teks multi-baris → file .txt + inject ke konteks.
+
+    Selesai dengan Ctrl+D (atau baris berisi titik saja). Isi otomatis jadi
+    pesan user berikutnya sehingga agent langsung membacanya."""
+    from datetime import datetime
+
+    paste_dir = Path.home() / ".dhybrid" / "pastes"
+    paste_dir.mkdir(parents=True, exist_ok=True)
+    name = (arg.strip() or datetime.now().astimezone().strftime("%Y%m%d-%H%M%S"))
+    if not name.lower().endswith(".txt"):
+        name += ".txt"
+    out = paste_dir / name
+    print(style("Mode paste — tempel teks sekarang; selesai dengan Ctrl+D atau baris berisi titik saja.", "36"))
+    lines: list[str] = []
+    try:
+        while True:
+            line = input()
+            if line.strip() == ".":
+                break
+            lines.append(line)
+    except (EOFError, KeyboardInterrupt):
+        pass
+    content = "\n".join(lines).strip()
+    if not content:
+        print(style("(kosong — tidak disimpan)", "33"))
+        return
+    out.write_text(content)
+    print(style(f"OK: {out} ({len(content)} char) — dikirim ke konteks agent.", "32"))
+    try:
+        from dhybrid.llm.base import ChatMessage
+
+        msg = f"[PASTE USER — {out}]\n\n{content}"
+        if len(msg) > 30000:
+            msg = msg[:30000] + "\n…[terpotong, file lengkap di path di atas]"
+        ctx.push(ChatMessage(role="user", content=msg))
+    except Exception as e:  # noqa: BLE001 — konteks gagal di-push → file tetap tersimpan
+        print(style(f"(file tersimpan, tapi gagal di-inject ke konteks: {e})", "33"))
+
+
 def handle_command(cmd: str, ctx) -> bool:
     """Return True bila harus keluar."""
     parts = cmd.split(maxsplit=1)
@@ -304,6 +373,10 @@ def handle_command(cmd: str, ctx) -> bool:
         _cmd_memories(ctx)
     elif name == "/search-memory":
         _cmd_search_memory(ctx, arg)
+    elif name == "/shot":
+        cmd_shot(ctx, arg)
+    elif name == "/paste":
+        cmd_paste(ctx, arg)
     else:
         print(style(f"command tidak dikenal: {name} (ketik /help)", "33"))
     return False
