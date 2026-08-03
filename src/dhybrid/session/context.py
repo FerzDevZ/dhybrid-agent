@@ -143,6 +143,14 @@ class SessionContext:
         self.yes_mode = yes_mode
         self.steps = 0
         self.last_cost = 0.0
+        # ---- (0.9.0) auto-skill lebih cerdas: Q&A berulang, kandidat digest,
+        # saran fallback, counter run — semua heuristik murni (tanpa LLM) ----
+        self.qa_history: list[str] = []
+        self.skill_candidates: list[dict] = []
+        self.skill_digest_shown = False
+        self.fallback_uses = 0
+        self.skill_suggested = False
+        self.run_count = 0
 
     # ---------- build ----------
 

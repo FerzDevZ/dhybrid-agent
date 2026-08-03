@@ -331,6 +331,8 @@ def _run_one(ctx, raw: str) -> None:
             if shown == ["general"] and not (mentions or ctx.forced_skills)
             else ""
         )
+        if note:
+            ctx.fallback_uses += 1
         print(style(f"[skill {tag}: {', '.join(shown)}{note}]", "90"))
     else:
         print(style("[skill aktif: (tidak ada yang cocok)]", "90"))
@@ -411,6 +413,11 @@ def _run_one(ctx, raw: str) -> None:
     # Matikan: config skills.auto_learn=false atau env DHYBRID_NO_SKILL=1.
     if ctx.cfg.skills.get("auto_learn", True) and not os.environ.get("DHYBRID_NO_SKILL"):
         _auto_learn_skill(ctx, raw, final, result)
+        # (0.9.0) auto-skill lebih cerdas: saran fallback general ≥3x +
+        # digest kandidat skill di akhir sesi (pilihan bernomor).
+        _maybe_suggest_skill(ctx, raw, final)
+        _maybe_skill_digest(ctx)
+    ctx.run_count += 1
 
     # Debug dump: DHYBRID_DEBUG=1 → simpan konteks & hasil run ke file
     # (~/.dhybrid/debug/) untuk reproduksi masalah model/tool.
@@ -438,25 +445,148 @@ def _auto_learn_skill(ctx, raw: str, final: str, result=None) -> None:
     tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
     files_created = result.files_created if result else 0
     tests_passed = result.tests_passed if result else None
-    if not auto_skill_worthwhile(
+    ctx.qa_history.append(raw)
+    worthwhile = auto_skill_worthwhile(
         tools_used, ctx.tools.tool_count, final, files_created, tests_passed
-    ):
-        return
+    )
     name = slugify(raw)
-    if name == "task" or not any(c.isalpha() for c in name) or name in TRIVIAL_SLUGS:
-        # prompt tidak punya kata kunci bermakna (sapaan / "4" / "123" / "lanjutkan")
-        # → bukan skill yang reusable; jangan buat sampah
+    usable = name != "task" and any(c.isalpha() for c in name) and name not in TRIVIAL_SLUGS
+    if not usable:
+        # prompt tanpa kata kunci bermakna (sapaan / "4" / "123" / "lanjutkan").
+        # Task nyata tetap jadi KANDIDAT digest akhir sesi (bukan sampah skill).
+        if worthwhile:
+            cand = _candidate_name(raw, tools_used)
+            if not any(c["name"] == cand for c in ctx.skill_candidates):
+                desc = (raw.strip()[:70] or cand) + " — skill otomatis dari sesi nyata"
+                steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))
+                md = build_skill_md(cand, desc, raw.strip()[:150], tools_used, final, steps=steps)
+                ctx.skill_candidates.append({"name": cand, "md": md})
         return
-    if any(s.name == name for s in ctx.skills):
-        # skill dengan nama sama sudah ada (repo/workspace) → jangan timpa
+    if not worthwhile:
+        # jalur pengetahuan (0.9.0): Q&A berulang (rapidfuzz ≥70%) dengan
+        # jawaban substantif → skill knowledge, tanpa syarat file dibuat.
+        if (
+            final
+            and not final.startswith("[error")
+            and len(final) >= 100
+            and _is_repeated_question_prompt(raw, ctx.qa_history[:-1])
+            and not any(s.name == name for s in ctx.skills)
+        ):
+            desc = (raw.strip()[:70] or name) + " — skill pengetahuan otomatis dari Q&A berulang"
+            md = build_skill_md(name, desc, raw.strip()[:150], tools_used, final, kind="knowledge")
+            _write_skill(ctx, name, md)
         return
-    desc = (raw.strip()[:70] or "task") + " — skill otomatis dari sesi nyata"
+    # jalur task: prosedur nyata (file dibuat / tool mutasi / test dijalankan)
+    desc = (raw.strip()[:70] or name) + " — skill otomatis dari sesi nyata"
     steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))
     md = build_skill_md(name, desc, raw.strip()[:150], tools_used, final, steps=steps)
+    existing = next((s for s in ctx.skills if s.name == name), None)
+    if existing:
+        # (0.9.0) hanya timpa skill LAHIR dari auto-skill — skill buatan tangan
+        # user tidak pernah disentuh — dan hanya bila langkah baru lebih lengkap.
+        if "skill otomatis" not in (existing.description or ""):
+            return
+        if not _should_update_skill(existing.body or "", md):
+            return
+        md += "\n\n*(diperbarui dari sesi nyata — langkah lebih lengkap)*"
+    _write_skill(ctx, name, md)
+
+
+def _write_skill(ctx, name: str, md: str) -> None:
+    """Tulis SKILL.md ke workspace auto-skill + feedback singkat."""
     target = ctx.workspace / "skills" / name / "SKILL.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(md)
     print(style(f"  [skill otomatis] {name} → {target}", "90"))
+
+
+def _is_repeated_question_prompt(
+    prompt: str, history: list[str], thresh: float = 0.75
+) -> bool:
+    """Pertanyaan yang sama/jenis sama pernah ditanyakan sebelumnya (rapidfuzz).
+
+    token_set_ratio: toleran terhadap urutan kata beda ("cara install breeze"
+    vs "bagaimana cara install breeze"), tapi beda topik tetap terpisah
+    ("apa itu flutter?" vs "apa itu laravel?" = 68% < 75%).
+    """
+    from rapidfuzz import fuzz
+
+    p = prompt.lower().strip()
+    return any(fuzz.token_set_ratio(p, h.lower()) >= thresh * 100 for h in history[-6:])
+
+
+def _should_update_skill(old_steps: str, new_steps: str) -> bool:
+    """Sesi baru layak menimpa skill lama bila langkahnya jelas lebih lengkap."""
+    return len(new_steps.strip().splitlines()) > len(old_steps.strip().splitlines()) + 1
+
+
+def _candidate_name(raw: str, tools_used: list[str]) -> str:
+    """Nama kandidat skill saat slugify gagal memberi nama bermakna."""
+    from dhybrid.skills.loader import slugify
+
+    name = slugify(raw)
+    if name != "task" and any(c.isalpha() for c in name) and name not in TRIVIAL_SLUGS:
+        return name
+    return f"task-{tools_used[0]}" if tools_used else "task"
+
+
+def _maybe_skill_digest(ctx) -> None:
+    """(0.9.0) Akhir sesi: tawarkan kandidat skill yang belum tersimpan.
+
+    Muncul maksimal 1x per sesi, hanya bila ≥5 run & ada kandidat.
+    Enter = simpan semua, nomor = pilih satu, 0/skip = lewati."""
+    if ctx.skill_digest_shown or ctx.run_count < 5 or not ctx.skill_candidates:
+        return
+    ctx.skill_digest_shown = True
+    print(style("\n💡 Beberapa task sukses bisa jadi skill reusable:", "1;33"))
+    for i, c in enumerate(ctx.skill_candidates, 1):
+        print(f"   {i}. {c['name']}")
+    print("   (ketik nomor, Enter = simpan semua, 0 = skip)")
+    try:
+        ans = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = ""
+    if not ans or ans in ("lanjutkan", "l", "ya", "y"):
+        picked = list(ctx.skill_candidates)
+    elif ans.isdigit() and 1 <= int(ans) <= len(ctx.skill_candidates):
+        picked = [ctx.skill_candidates[int(ans) - 1]]
+    else:
+        picked = []
+    for c in picked:
+        _write_skill(ctx, c["name"], c["md"])
+    if picked:
+        print(style(f"  [skill tersimpan] {', '.join(c['name'] for c in picked)}", "90"))
+
+
+def _maybe_suggest_skill(ctx, raw: str, final: str) -> None:
+    """(0.9.0) Fallback general ≥3x → tawarkan membuat skill spesifik.
+
+    Sekali per sesi; ketik nama → simpan, Enter/skip → lewati."""
+    if ctx.fallback_uses < 3 or ctx.skill_suggested:
+        return
+    ctx.skill_suggested = True
+    print(
+        style(
+            "\n💡 Banyak prompt belum tertangkap skill spesifik (fallback general ≥3x).",
+            "1;33",
+        )
+    )
+    from dhybrid.skills.loader import build_skill_md, slugify
+
+    name = slugify(raw)
+    if name == "task" or not any(c.isalpha() for c in name) or name in TRIVIAL_SLUGS:
+        return
+    print(f"   Ketik nama skill untuk menyimpan pola ini (mis. '{name}'), atau Enter untuk skip.")
+    try:
+        ans = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = ""
+    if ans and ans not in ("skip", "tidak", "no", "0"):
+        tools_used = [n for n, c in ctx.tools.tool_count.items() if c > 0]
+        desc = ans + " — skill otomatis dari sesi nyata"
+        steps = "\n".join(f"{i + 1}. pakai tool `{t}`" for i, t in enumerate(tools_used))
+        md = build_skill_md(ans, desc, raw.strip()[:150], tools_used, final, steps=steps)
+        _write_skill(ctx, ans, md)
 
 
 def _dump_debug(ctx, raw: str, result) -> None:

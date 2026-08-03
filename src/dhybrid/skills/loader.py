@@ -72,7 +72,10 @@ class Skill:
 
 
 def _parse_skill_file(path: Path) -> Skill | None:
-    text = path.read_text(errors="replace")
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        return None
     m = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)$", text, re.DOTALL)
     if not m:
         return None
@@ -81,8 +84,13 @@ def _parse_skill_file(path: Path) -> Skill | None:
     desc = re.search(r"^description:\s*(.+)$", front, re.MULTILINE)
     if not name:
         return None
+    name = name.group(1).strip().strip('"')
+    # lint (0.9.0): nama skill harus slug valid — tanpa spasi/kurung/karakter
+    # aneh. Frontmatter rusak tidak boleh jadi skill sampah / crash loader.
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name):
+        return None
     return Skill(
-        name=name.group(1).strip().strip('"'),
+        name=name,
         description=desc.group(1).strip().strip('"') if desc else "",
         body=body,
         path=path,
@@ -214,11 +222,20 @@ def extract_skill_mentions(prompt: str, known: set[str]) -> tuple[str, list[str]
     return MENTION_RE.sub(_sub, prompt), found
 
 
-def build_skill_md(name: str, description: str, goal: str, tools_used: list[str], result: str, steps: str | None = None) -> str:
+def build_skill_md(
+    name: str,
+    description: str,
+    goal: str,
+    tools_used: list[str],
+    result: str,
+    steps: str | None = None,
+    kind: str = "task",
+) -> str:
     """Buat SKILL.md dari sesi yang sukses (auto-skill, gaya Hermes).
 
     Ringkas & hemat token: body dipotong ~400 karakter agar inject skill
-    tidak membebani konteks.
+    tidak membebani konteks. kind="knowledge" → skill pengetahuan (Q&A
+    berulang), kind="task" (default) → skill prosedur dengan langkah tool.
     """
     tool_line = ", ".join(tools_used) if tools_used else "(tanpa tool)"
     parts = [
@@ -227,7 +244,9 @@ def build_skill_md(name: str, description: str, goal: str, tools_used: list[str]
         f"**Tujuan:** {goal}\n\n",
         f"**Tools yang dipakai:** {tool_line}\n\n",
     ]
-    if steps:
+    if kind == "knowledge":
+        parts.append(f"**Jawaban dari sesi nyata:**\n\n{result[:400]}\n")
+    elif steps:
         parts.append(f"**Langkah yang terbukti berhasil** (dari sesi nyata):\n\n{steps[:300]}\n\n")
     else:
         parts.append(f"**Catatan dari sesi nyata:**\n\n{result[:400]}\n")
