@@ -101,7 +101,9 @@ def show_welcome(ctx) -> None:
     print(style(f"  dhybrid-agent v{__version__} — coding agent hemat token (hybrid routing)", "1;36"))
     print(f"  model utama : {ctx.current_model_label()}")
     if getattr(ctx, "resumed_id", None):
-        print(style(f"  melanjutkan sesi terakhir di proyek ini: {ctx.resumed_id}", "90"))
+        title = (ctx.store.get_session(ctx.sid) or {}).get("title", "") or ""
+        suffix = f" — {title}" if title else ""
+        print(style(f"  melanjutkan sesi terakhir di proyek ini: {ctx.resumed_id}{suffix}", "90"))
     print(f"  workspace   : {ctx.cwd}")
     print()
     print("  MENU — pilih dengan prefix /, atau langsung ketik pertanyaan:")

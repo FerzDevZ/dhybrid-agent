@@ -15,11 +15,14 @@ from dhybrid.ui.render import style
 from dhybrid.ui.repl import repl_loop, run_agent
 
 
-def _build_context(args, resume: bool = False) -> SessionContext:
+def _build_context(args, resume: bool = False, sid: str | None = None) -> SessionContext:
     cfg = Config.load(Path(args.config) if args.config else None)
     store = SessionStore(cfg.workspace / "sessions.sqlite")
-    cwd = args.cwd or "."
-    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False), resume=resume)
+    # normalisasi cwd (absolut + resolve symlink) supaya auto-resume konsisten
+    # antar pemanggilan: `dhybrid repl` (cwd=".") dan `dhybrid --cwd /x/repl`
+    # dari folder yg sama harus dianggap proyek yang sama.
+    cwd = str(Path(args.cwd or ".").expanduser().resolve())
+    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False), resume=resume, sid=sid)
     if getattr(args, "model", None):
         ctx.set_model(args.model)
     return ctx
@@ -89,15 +92,17 @@ def cmd_tokens(args) -> int:
 def cmd_resume(args) -> int:
     from dhybrid.llm.base import ChatMessage
 
-    ctx = _build_context(args)
-    info = ctx.store.get_session(args.session_id)
+    cfg = Config.load(Path(args.config) if args.config else None)
+    store = SessionStore(cfg.workspace / "sessions.sqlite")
+    info = store.get_session(args.session_id)
     if not info:
         print(f"ERROR: sesi {args.session_id} tidak ditemukan")
         return 1
-    ctx.sid = args.session_id
+    # sid diteruskan → SessionContext TIDAK membuat sesi baru (tidak ada orphan).
+    ctx = _build_context(args, sid=args.session_id)
     ctx.ctx.summary = info["summary"] or None
-    for m in ctx.store.last_messages(args.session_id, n=5):
-        ctx.ctx.push(ChatMessage(role=m["role"], content=m["content"]))
+    for m in store.last_messages(args.session_id, n=5):
+        ctx.ctx.push(ChatMessage(role=m["role"], content=m.get("content") or ""))
     print(style(f"melanjutkan sesi {args.session_id} — {info['title']}", "36"))
     if info["summary"]:
         print(style(f"ringkasan: {info['summary'][:200]}", "90"))

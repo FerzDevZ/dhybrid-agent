@@ -98,3 +98,17 @@ def test_fresh_resume_false_starts_new_session(tmp_path, cfg):
     ctx2 = SessionContext(cfg, store, cwd=str(tmp_path / "lain"), resume=True)
     assert ctx2.resumed_id == other.sid      # resume proyek-nya sendiri
     assert ctx2.sid != ctx1.sid
+
+
+def test_explicit_sid_reuses_session_without_orphan(tmp_path, cfg):
+    """Fix cmd_resume: bila sid diteruskan eksplisit, SessionContext TIDAK boleh
+    membuat sesi baru (sebelumnya ada baris sesi 'yatim' terbuang tiap resume)."""
+    from dhybrid.session.context import SessionContext
+
+    store = SessionStore(tmp_path / "s.sqlite")
+    sid = store.new_session(cwd="/x")
+    before = len(store.sessions(limit=1000))
+    ctx = SessionContext(cfg, store, cwd="/x", sid=sid)
+    assert ctx.sid == sid
+    assert ctx.resumed_id is None
+    assert len(store.sessions(limit=1000)) == before  # tidak ada orphan

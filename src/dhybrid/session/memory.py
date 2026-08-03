@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -60,6 +61,43 @@ class MemoryStore:
         if not rows:
             return ""
         return "\n".join(f"• {key}: {value[:220]}" for key, value in rows)
+
+    @staticmethod
+    def _fts_terms(context: str) -> list[str]:
+        """Token alfanumerik dari teks konteks (cwd/path) untuk query FTS aman."""
+        return list(dict.fromkeys(re.findall(r"[A-Za-z0-9_]{2,}", context or "")))
+
+    def digest(self, context: str = "", limit: int = 8) -> str:
+        """Fakta paling RELEVAN utk di-inject di awal sesi, bukan sekadar 'terbaru'.
+
+        Prioritas: (1) cari berdasar konteks (basename cwd/topik proyek) via FTS,
+        (2) isi sisa slot dgn fakta terbaru bila terlalu sedikit yang cocok.
+        Fallback ke `recent()` bila FTS tak valid / tidak ada cocok.
+        """
+        seen: dict[str, str] = {}
+        terms = self._fts_terms(context)
+        if terms:
+            query = " OR ".join(f'"{t}"' for t in terms[:12])
+            try:
+                rows = self.conn.execute(
+                    "SELECT key, value FROM memory_fts WHERE memory_fts MATCH ? LIMIT ?",
+                    (query, max(limit, 1)),
+                ).fetchall()
+                for k, v in rows:
+                    seen.setdefault(k, v)
+            except sqlite3.OperationalError:
+                seen = {}
+        if len(seen) < limit:
+            # isi sisa dengan fakta terbaru (bukan menimpa yg sudah relevan)
+            rows = self.conn.execute(
+                "SELECT key, value FROM memory ORDER BY updated DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            for k, v in rows:
+                seen.setdefault(k, v)
+        if not seen:
+            return ""
+        return "\n".join(f"• {key}: {value[:220]}" for key, value in list(seen.items())[:limit])
 
     def forget(self, key: str) -> str:
         self.conn.execute("DELETE FROM memory WHERE key=?", (key,))

@@ -108,7 +108,9 @@ class SessionContext:
         self.reload_skills(cwd)
         # ---- (Task 5) inject fakta memori jangka panjang ke konteks awal ----
         # Agent langsung "ingat" konvensi/keputusan proyek, tidak mulai kosong.
-        memory_digest = self.memory.recent(limit=8)
+        # Pakai digest relevan-berbasis-konteks (cwd): fakta yg cocok dgn proyek
+        # ini diprioritaskan, sisanya diisi fakta terbaru — hemat token & tajam.
+        memory_digest = self.memory.digest(context=cwd, limit=8)
         memory_block = (
             f"\n\n[JANGAN DICARI ULANG] Proyek/workspace ini punya catatan:\n{memory_digest}"
             if memory_digest else ""

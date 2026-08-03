@@ -45,6 +45,29 @@ def test_memory_recent_returns_facts(tmp_path):
     assert "a:" in out and "b:" in out
 
 
+def test_memory_digest_prioritizes_context_relevant(tmp_path):
+    """digest(context) menaikkan fakta yang cocok dgn proyek/cwd, bukan hanya
+    yang paling baru — supaya injeksi awal sesi relevan & hemat token."""
+    mem = MemoryStore(tmp_path / "m.sqlite")
+    mem.remember("deploy", "proyek dhybrid-agent di-deploy ke koyeb")
+    mem.remember("sembarang", "catatan terbaru tanpa keyword proyek")
+    out = mem.digest(context="/tmp/dhybrid-agent", limit=2)
+    assert "dhybrid-agent" in out  # fakta relevan tetap muncul meski bukan yg terbaru
+    # recent() tetap bekerja normal (ada kaitannya dgn digest)
+    assert "sembarang" in mem.recent(limit=2)
+
+
+def test_memory_digest_falls_back_to_recent_when_no_match(tmp_path):
+    mem = MemoryStore(tmp_path / "m.sqlite")
+    mem.remember("a", "fakta alfa")
+    mem.remember("b", "fakta beta")
+    out = mem.digest(context="xyzzy-absurd-tidak-ada-di-memory", limit=2)
+    assert "fakta alfa" in out and "fakta beta" in out
+    # konteks kosong / tidak relevan → tetap aman, tidak crash
+    assert mem.digest(context="", limit=2) != ""
+    assert mem.digest(context="!!! @@ 123 ::", limit=1) != ""  # token FTS dibersihkan
+
+
 def test_session_cwd_and_last_session_for_cwd(tmp_path):
     store = SessionStore(tmp_path / "s.sqlite")
     assert store.last_session_for_cwd("/proyek/a") is None
