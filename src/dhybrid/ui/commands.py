@@ -5,7 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from dhybrid.dotenv import set_env_key
+from dhybrid.session.memory import MemoryStore
 from dhybrid.ui.render import style
+
+
+def _mem() -> MemoryStore:
+    """MemoryStore singleton (buat repl commands)."""
+    return MemoryStore()
 
 # nama ramah -> env var API key
 PROVIDERS = [
@@ -62,6 +68,10 @@ MENU LENGKAP — pilih dengan prefix / :
   📂 /clear              reset konteks percakapan
   📂 /sessions           daftar sesi sebelumnya
   🧠 /skills             daftar skill yang tersedia
+  💾 /remember <k> <v>  simpan fakta jangka panjang
+  🗑️  /forget <k>        hapus fakta memorip
+  📜 /memories          lihat fakta terbaru
+  🔍 /search-memory <q>  cari fakta (FTS)
   🚪 /quit, /exit        keluar
 
 CLI (di luar REPL): dhybrid run "<prompt>" · dhybrid resume <id> ·
@@ -283,6 +293,14 @@ def handle_command(cmd: str, ctx) -> bool:
             print(f"  {s['id']}  {s['created'][:16]}  {s['title']}")
     elif name == "/skills":
         _skills_cmd(ctx, arg)
+    elif name in ("/remember", "/rmem"):
+        _cmd_remember(ctx, arg)
+    elif name in ("/forget", "/fmem"):
+        _cmd_forget(ctx, arg)
+    elif name in ("/memories", "/mem"):
+        _cmd_memories(ctx)
+    elif name == "/search-memory":
+        _cmd_search_memory(ctx, arg)
     else:
         print(style(f"command tidak dikenal: {name} (ketik /help)", "33"))
     return False
@@ -330,3 +348,42 @@ def _print_tokens(ctx) -> None:
           f"{ctx.budget.history and ctx.budget.history[-1]['cum'] or 0:,}")
     print(f"  routing      : small={ctx.router.stats.get('small', 0)} big={ctx.router.stats.get('big', 0)}"
           if ctx.router else "  routing      : (router non-aktif)")
+
+
+def _cmd_remember(ctx, arg: str) -> None:
+    """/remember <key> <value> — simpan fakta jangka panjang.
+    Contoh: /remember user.lang id"""
+    parts = arg.split(maxsplit=1)
+    if len(parts) < 2:
+        print(style("Pemakaian: /remember <key> <value>  (mis. /remember user.lang id)", "33"))
+        return
+    key, value = parts[0], parts[1].strip()
+    print(style("  " + _mem().remember(key, value), "32"))
+
+
+def _cmd_forget(ctx, arg: str) -> None:
+    """/forget <key> — hapus fakta memorip."""
+    if not arg.strip():
+        print(style("Pemakaian: /forget <key>", "33"))
+        return
+    print(style("  " + _mem().forget(arg.strip()), "32"))
+
+
+def _cmd_memories(ctx) -> None:
+    """/memories — tampilkan fakta terbaru."""
+    out = _mem().recent()
+    if not out:
+        print("(memori kosong — pakai /remember <key> <value> untuk menyimpan)")
+        return
+    print(style("MEMORI TERBARU:", "1;36"))
+    for line in out.splitlines():
+        print("  " + line)
+
+
+def _cmd_search_memory(ctx, arg: str) -> None:
+    """/search-memory <query> — cari fakta via FTS."""
+    if not arg.strip():
+        print(style("Pemakaian: /search-memory <kata kunci>", "33"))
+        return
+    out = _mem().search(arg.strip())
+    print(out if out else "(tidak ada memori cocok)")

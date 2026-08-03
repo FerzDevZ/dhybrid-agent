@@ -61,14 +61,55 @@ DANGEROUS_PATTERNS = [
 
 
 def is_dangerous(command: str) -> bool:
-    """Deteksi perintah berbahaya — normalisasi spasi + kombinasi flag rm."""
+    """Deteksi perintah berbahaya — normalisasi spasi + kombinasi flag rm.
+
+    Kebijakan:
+    - `rm -rf`/`rm -fr` dst DITOLAK TANPA konfirmasi bila targetnya root `/`,
+      rumah `/home/xxx`, atau path sistem (`/etc`, `/usr`, …) — ini menghancurkan
+      keseluruhan, bukan sekadar konfirmasi.
+    - rm -rf ke target spesifik di dalam workspace tetap lewat konfirmasi user.
+    - traversal (`..`) di target juga selalu diblokir.
+    
+    Keamanan: meski parser pernah menghasilkan `rm -rf /home/firman/` dari input
+    workspace, validator ini MENOLAK keluarga root `/home` berlapis — tidak ada
+    jalan untuk menghapus rumah user via tool terminal.
+    """
     c = re.sub(r"\s+", " ", command.strip())
+    tokens = c.split()
+    if not tokens:
+        return False
+
+    # semua pola berbahaya statis
     if any(p in c for p in DANGEROUS_PATTERNS):
         return True
-    # rm + flag recursive/force dalam urutan/format apa pun (rm -r -f, rm -fr, ...)
-    tokens = c.split()
+
+    # deteksi `rm` dengan flag rekursif+force (rm -rf, rm -r -f, rm -fr, …)
     if "rm" in tokens:
-        flags = "".join(t for t in tokens if t.startswith("-"))
-        if ("r" in flags and "f" in flags) or "rf" in flags or "fr" in flags:
-            return True
+        flags = "".join(t.lstrip("-") for t in tokens[1:] if t.startswith("-"))
+        rm_rf = ("r" in flags and "f" in flags) or "rf" in flags or "fr" in flags
+        if rm_rf:
+            # kumpulkan target (token bukan flag)
+            targets = [t for t in tokens[1:] if not t.startswith("-")]
+            _FORBIDDEN_ROOTS = (
+                "/", "/home", "/etc", "/usr", "/opt", "/srv", "/var",
+                "/bin", "/sbin", "/lib", "/lib64", "/root",
+                "/proc", "/sys", "/dev", "/boot",
+            )
+
+            def _is_bad_root(p: str) -> bool:
+                if ".." in p:
+                    return True
+                try:
+                    r = str(Path(p).expanduser().resolve())
+                except (OSError, ValueError):
+                    r = p
+                # blokir root sistem + /home (dan /home/xxx apa saja) → tidak pernah hapus rumah
+                return r in _FORBIDDEN_ROOTS or r == "/home" or r.startswith("/home/")
+
+            # tidak ada target → berbahaya (rm -rf tanpa argumen = /)
+            if not targets:
+                return True
+            # ada target tapi ada yang ke root/house/sistem/traversal → blokir total
+            if any(_is_bad_root(t) for t in targets):
+                return True
     return False
