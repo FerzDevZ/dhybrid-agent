@@ -49,6 +49,24 @@ def test_resolve_preset_and_inline():
         reg.resolve("nope-preset")
 
 
+def test_names_returns_preset_names_not_provider_names():
+    """Regresi: loop dalam `for ..., env in PROVIDERS` dulu menimpa variabel
+    `name` sehingga names() mengembalikan nama provider ("Anthropic", dst)
+    → resolve() crash KeyError saat /settings. Harus nama preset murni."""
+    reg = ModelRegistry(Config.load("config/default.yaml"))
+    names = reg.names()
+    # semua nama harus bisa di-resolve tanpa exception (bukan nama provider)
+    for n in names:
+        assert reg.resolve(n).model, f"preset {n!r} gagal resolve"
+    # pastikan TIDAK ada label provider yang bocor sebagai preset
+    from dhybrid.ui.commands import PROVIDERS
+    provider_labels = {p[0].split()[0] for p in PROVIDERS}
+    assert not (set(names) & provider_labels), f"nama provider bocor: {names}"
+    # preset gemini yang dikenal harus ada
+    assert "gemini-fast" in names
+    assert "gemini-big" in names
+
+
 def test_load_dotenv(tmp_path, monkeypatch):
     (tmp_path / ".env").write_text("# komentar\nFOO=bar\nBAZ=\"qux\"\n")
     monkeypatch.delenv("FOO", raising=False)

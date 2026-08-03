@@ -39,14 +39,14 @@ class ModelRegistry:
         # Hanya return presets yang provider-nya enabled
         enabled = _load_provider_enabled()
         result = []
-        for name, preset in self.presets.items():
+        for preset_name, preset in self.presets.items():
             api_key_env = preset.get("api_key_env", "")
             enabled_provider = True
-            for name, env in PROVIDERS:
+            for prov_name, env in PROVIDERS:
                 if env == api_key_env:
-                    if not enabled.get(name, True):
+                    if not enabled.get(prov_name, True):
                         enabled_provider = False
                     break
             if enabled_provider:
-                result.append(name)
+                result.append(preset_name)
         return sorted(result)
