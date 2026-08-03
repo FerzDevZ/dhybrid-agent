@@ -41,7 +41,7 @@ def cmd_run(args) -> int:
     escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
     esc_msg = " (escalation: model → kuat)" if result.escalated_quality else ""
     print(style(
-        f"\n" + "─" * 44 + "\n"
+        "\n" + "─" * 44 + "\n"
         f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "

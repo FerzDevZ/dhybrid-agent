@@ -28,7 +28,7 @@ class ModelRegistry:
             # Cek apakah provider enabled
             enabled = _load_provider_enabled()
             for provider_name, env in PROVIDERS:
-                if env == f"{provider.upper()}_API_KEY" or env == f"OPENCODE_ZEN_API_KEY":
+                if env == f"{provider.upper()}_API_KEY" or env == "OPENCODE_ZEN_API_KEY":
                     if not enabled.get(provider_name, True):
                         raise KeyError(f"provider {provider_name} is disabled")
                     break

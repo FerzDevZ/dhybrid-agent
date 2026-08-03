@@ -131,9 +131,6 @@ class SessionContext:
         return m
 
     def _build_router(self) -> HybridRouter | None:
-        # Filter presets berdasarkan provider enabled state
-        enabled = _load_provider_enabled()
-        
         big = make_client(self.model_cfg)
         if self.small_model_name:
             small_cfg = self.registry.resolve(self.small_model_name)
@@ -168,7 +165,7 @@ class SessionContext:
         if ":" in name:
             return self.registry.resolve(name)
         # 3. Model manual - cek apakah model dikenal di preset manapun
-        for preset_name, preset in self.registry.presets.items():
+        for preset in self.registry.presets.values():
             if preset.get("model") == name:
                 return ModelConfig(**preset)
         # 4. Fallback: gunakan provider/base_url dari model utama SAAT INI

@@ -10,7 +10,6 @@ import re
 from dhybrid.llm.base import ChatMessage
 from dhybrid.llm.tokens import estimate_messages
 
-
 # ---- Known Facts Tracker ----
 # Mencegah agen menanyakan hal yang sudah diketahati.
 _FACT_PATTERNS = [

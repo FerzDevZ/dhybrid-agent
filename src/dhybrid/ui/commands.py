@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from dhybrid.dotenv import set_env_key
@@ -30,7 +29,7 @@ def _load_provider_enabled() -> dict:
         import json
         try:
             return json.loads(PROVIDER_ENABLE_FILE.read_text())
-        except Exception:
+        except Exception:  # noqa: BLE001,S110 — file corrupt → fallback default semua enabled
             pass
     # default: semua enabled
     return {name: True for name, _ in PROVIDERS}
@@ -127,8 +126,6 @@ def _provider_cmd(ctx) -> None:
     while True:
         print(style("\n=== KELOLA PROVIDER ===", "1;36"))
         for i, (name, env) in enumerate(PROVIDERS, start=1):
-            is_on = enabled.get(name, True)
-            has_key = bool(os.environ.get(env))
             status = "✓" if enabled.get(name, True) else "✗"
             key_mark = "🔑" if os.environ.get(env) else "  "
             print(f"  {i}. {name:<32} {status}  {key_mark}  ({env})")

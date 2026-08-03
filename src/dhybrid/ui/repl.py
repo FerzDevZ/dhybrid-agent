@@ -213,9 +213,9 @@ def _run_one(ctx, raw: str) -> None:
     escl_tag = f" ⤴{result.escalation_count}" if result.escalated_quality else ""
     esc_msg = ""
     if result.escalated_quality:
-        esc_msg = f" (escalation: model → kuat)"
+        esc_msg = " (escalation: model → kuat)"
     print(style(
-        f"\n" + "─" * 44 + "\n"
+        "\n" + "─" * 44 + "\n"
         f" DONE — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "
         f"· {result.files_created} file{esc_msg} "

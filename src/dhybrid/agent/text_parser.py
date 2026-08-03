@@ -7,8 +7,6 @@ Experimental wrapper untuk model free (Zen free models).
 from __future__ import annotations
 
 import re
-import json
-from typing import Optional
 from dataclasses import dataclass
 
 # Pattern untuk mendeteksi intent coding di teks natural
@@ -63,8 +61,7 @@ class TextToToolParser:
     def parse(self, text: str) -> list[ParsedToolCall]:
         """Parse teks natural language → list tool calls."""
         calls = []
-        text_lower = text.lower()
-        
+
         for patterns, tool_name, parser in self.patterns:
             for pattern in patterns:
                 matches = re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
@@ -78,7 +75,7 @@ class TextToToolParser:
                                 arguments=args,
                                 confidence=confidence
                             ))
-                    except Exception:
+                    except Exception:  # noqa: BLE001,S112 — lewati pattern yg gagal parse
                         continue
         
         # Sort by confidence descending
@@ -103,7 +100,7 @@ class TextToToolParser:
         return min(base, 0.95)
     
     # Parser functions
-    def _parse_write_file(self, match: re.Match) -> Optional[dict]:
+    def _parse_write_file(self, match: re.Match) -> dict | None:
         groups = match.groups()
         if len(groups) >= 2:
             path = groups[0].strip().strip('`"\'')
@@ -112,7 +109,7 @@ class TextToToolParser:
                 return {"path": path, "content": content}
         return None
     
-    def _parse_read_file(self, match: re.Match) -> Optional[dict]:
+    def _parse_read_file(self, match: re.Match) -> dict | None:
         groups = match.groups()
         if groups:
             path = groups[0].strip().strip('`"\'')
@@ -120,7 +117,7 @@ class TextToToolParser:
                 return {"path": path, "offset": 1, "limit": 100}
         return None
     
-    def _parse_apply_patch(self, match: re.Match) -> Optional[dict]:
+    def _parse_apply_patch(self, match: re.Match) -> dict | None:
         groups = match.groups()
         if len(groups) >= 2:
             path = groups[0].strip().strip('`"\'')
@@ -130,7 +127,7 @@ class TextToToolParser:
                 return {"path": path, "old_string": "<<PLACEHOLDER>>", "new_string": new_content}
         return None
     
-    def _parse_terminal(self, match: re.Match) -> Optional[dict]:
+    def _parse_terminal(self, match: re.Match) -> dict | None:
         groups = match.groups()
         if groups:
             cmd = groups[0].strip().strip('`"\'')
@@ -138,7 +135,7 @@ class TextToToolParser:
                 return {"command": cmd}
         return None
     
-    def _parse_grep(self, match: re.Match) -> Optional[dict]:
+    def _parse_grep(self, match: re.Match) -> dict | None:
         groups = match.groups()
         if len(groups) >= 1:
             pattern = groups[0].strip().strip('`"\'')
@@ -147,7 +144,7 @@ class TextToToolParser:
                 return {"pattern": pattern, "path": path}
         return None
     
-    def _parse_find_files(self, match: re.Match) -> Optional[dict]:
+    def _parse_find_files(self, match: re.Match) -> dict | None:
         groups = match.groups()
         path = groups[0].strip().strip('`"\'') if groups else "."
         return {"path": path, "pattern": "*"}
@@ -161,7 +158,7 @@ def extract_tool_calls_from_text(text: str, min_confidence: float = 0.5) -> list
     2. Legacy tool blocks: ```tool {"name": "grep", "arguments": {"q": "x"}} ```
     """
     # First try legacy tool block format
-    from dhybrid.agent.parsing import parse_tool_calls, dedupe_tool_calls
+    from dhybrid.agent.parsing import dedupe_tool_calls, parse_tool_calls
     legacy_calls = dedupe_tool_calls(parse_tool_calls(text))
     if legacy_calls:
         return legacy_calls

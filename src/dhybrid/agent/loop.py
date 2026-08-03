@@ -14,9 +14,9 @@ import re
 from dataclasses import dataclass, field
 
 from dhybrid.agent.hooks import Hooks
-from dhybrid.agent.text_parser import extract_tool_calls_from_text
 from dhybrid.agent.quality import score_output
 from dhybrid.agent.streaming import ToolBlockFilter
+from dhybrid.agent.text_parser import extract_tool_calls_from_text
 from dhybrid.agent.verify import count_created_files, snapshot_files, verify_build
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.compress import compact_conversation

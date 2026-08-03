@@ -1,4 +1,3 @@
-import os
 import subprocess
 import sys
 
@@ -30,6 +29,6 @@ def test_pyproject_version_matches_runtime():
 
     root = Path(__file__).resolve().parents[2]  # repo root
     pyproject = (root / "pyproject.toml").read_text()
-    m = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
+    m = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
     assert m, "versi tidak ditemukan di pyproject.toml"
     assert m.group(1) == __version__, f"pyproject {m.group(1)!r} != runtime {__version__!r}"
