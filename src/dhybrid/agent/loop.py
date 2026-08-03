@@ -293,9 +293,11 @@ class AgentLoop:
             if step > 0:
                 self._live_verify(step, before_files)
 
-            # 3) early-stop: jawaban final tanpa tool-call
+            # 3) early-stop: jawaban tanpa tool-call — TAPI hanya bila benar-benar final.
+            # Task membangun TIDAK boleh berhenti: (a) sambil bertanya/meminta user pilih,
+            # atau (b) tanpa menghasilkan perubahan file apa pun. Kalau itu terjadi → escalate/nudge.
             if not resp.message.tool_calls:
-                # ukur kualitas + bukti nyata (file/test) untuk keputusan
+                # measure kualitas + bukti nyata (file/test) untuk keputusan
                 v = verify_build(self.cwd, before_files, snapshot_files(self.cwd), self.tool_events)
                 is_build = _is_build_request(user_prompt)
                 score = score_output(
@@ -310,49 +312,70 @@ class AgentLoop:
                 result.tests_passed = v["tests_passed"]
                 result.stopped_early = needs_change_check(last_text)
                 is_empty = not last_text.strip()
+                asks_qa = _ends_with_question(last_text)
+                says_done = _looks_complete(last_text)
+                evidence = v["files_created"] > 0 or self._used_mutating_tool()
 
                 if not self.budget.exhausted:
-                    # 3d-FIRST) Quality-based escalation: skor rendah → langsung naik model kuat
-                    # Prioritaskan ini di atas nudge — jika kualitas jelek, jangan nyoba-nyoba nudge.
+                    # jangan tanya berulang soal yang sudah diajukan
+                    if asks_qa:
+                        self.ctx.facts.mark_asked(last_text.strip())
+
+                    # 3d-FIRST) eskalasi kualitas: skor rendah ATAU task membangun masih bertanya
+                    # → langsung naik model kuat (bukan cuma nudge-ulang yang membuang token).
                     if (
-                        score < self.cfg.quality_threshold
-                        and self.cfg.escalation_chain
+                        self.cfg.escalation_chain
                         and self._client_factory is not None
                         and self._n_escalations < self.cfg.max_escalations
+                        and (score < self.cfg.quality_threshold or (is_build and asks_qa))
                     ):
                         nxt = self._next_valid_escalation()
                         if nxt:
-                            next_preset, client = nxt
+                            client = nxt[1]
                             result.escalated_quality = True
                             result.escalation_count = self._n_escalations
-                            esc_msg = (
-                                f"[sistem escalation] Skor kualitas rendah ({score}/100). "
-                                f"Beralih ke model yang lebih kuat: {next_preset}. "
-                                f"Selesaikan penuh tanpa bertanya, tanpa berjanji — lakukan eksekusi nyata."
+                            reason = (
+                                f"Skor kualitas rendah ({score}/100)."
+                                if score < self.cfg.quality_threshold
+                                else "Masih bertanya di tengah tugas membangun."
                             )
-                            self.ctx.push(ChatMessage(role="user", content=esc_msg))
+                            self.ctx.push(ChatMessage(role="user", content=(
+                                f"[sistem escalation] {reason} Beralih ke model lebih kuat: {nxt[0]}. "
+                                "Selesaikan penuh tanpa bertanya/janji — lakukan eksekusi nyata."
+                            )))
                             continue
-                    # catat pertanyaan yang sudah diajukan (mencegah loop bertanya)
-                    if _ends_with_question(last_text):
-                        self.ctx.facts.mark_asked(last_text.strip())
+
                     # 3a) model diam → minta jawaban
                     if is_empty and nudges < self.cfg.max_nudges:
                         nudges += 1
                         self.ctx.push(ChatMessage(role="user", content=SILENT_MSG))
                         continue
-                    # 3b) nudge build: bertanya/berjanji tanpa eksekusi file
+
+                    # 3b) nudge build: diminta buat tapi belum ada perubahan file → jangan selesai
                     if (
-                        not result.stopped_early
+                        is_build
+                        and not evidence
+                        and not says_done
+                        and not result.stopped_early
                         and nudges < self.cfg.max_nudges
-                        and is_build
-                        and not self._used_mutating_tool()
-                        and not _looks_complete(last_text)
-                        and not is_empty
                     ):
                         nudges += 1
-                        msg = NUDGE_MSG if _ends_with_question(last_text) else EXEC_MSG
-                        self.ctx.push(ChatMessage(role="user", content=msg))
+                        self.ctx.push(
+                            ChatMessage(role="user", content=NUDGE_MSG if asks_qa else EXEC_MSG)
+                        )
                         continue
+
+                    # 3b2) HARD RULE: build diakhiri pertanyaan dan escalation sudah habis
+                    # → tetap jangan disangkakan "selesai". Sodor pilih-default lalu lanjut.
+                    if is_build and asks_qa and nudges < self.cfg.max_nudges * 2:
+                        nudges += 1
+                        self.ctx.push(ChatMessage(role="user", content=(
+                            "[instruksi sistem] Kamu masih mengajukan pertanyaan/menawarkan pilihan "
+                            "padahal ini tugas MEMBANGUN. PILIH default yang masuk akal dan LANJUTKAN "
+                            "eksekusi sampai tuntas. Jangan berhenti untuk memilih."
+                        )))
+                        continue
+
                     # 3c) self-critique: hanya bila model sudah BERTINDAK (pakai tool)
                     if (
                         not critiqued
@@ -365,6 +388,10 @@ class AgentLoop:
                         result.critiqued = True
                         self.ctx.push(ChatMessage(role="user", content=CRITIQUE_MSG))
                         continue
+
+                    # tandai jujur: build dipaksa berhenti padahal belum ada bukti file berubah
+                    if is_build and not evidence:
+                        result.stopped_early = True  # biar baris DONE tidak membohongi "beres"
 
                 result.final_text = last_text
                 self.hooks.finish(result)

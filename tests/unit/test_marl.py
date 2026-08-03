@@ -69,6 +69,40 @@ def test_verify_build_summary(tmp_path):
     assert v["files_created"] == 1 and v["tests_passed"] is True
 
 
+def test_verify_snapshot_prunes_dependency_dirs(tmp_path):
+    """Folder dependensi (vendor/, node_modules/) tidak boleh ikut dihitung
+    sebagai 'file dibuat' — kalau ikut, angka absurd seperti '17624 file' muncul."""
+    app = tmp_path / "app" / "views"
+    app.mkdir(parents=True)
+    (app / "home.blade.php").write_text("x")
+
+    vendor = tmp_path / "vendor" / "autoload.php"
+    vendor.parent.mkdir(parents=True)
+    vendor.write_text("<?php")
+
+    nm = tmp_path / "node_modules" / "lib" / "i.js"
+    nm.parent.mkdir(parents=True)
+    nm.write_text("x")
+
+    snap = snapshot_files(str(tmp_path))
+    assert "app/views/home.blade.php" in snap
+    assert not any(p.startswith("vendor/") for p in snap)
+    assert not any(p.startswith("node_modules/") for p in snap)
+
+
+def test_count_created_ignores_dependency_dirs(tmp_path):
+    """Menciptakan file vendor/node_modules tidak boleh menaikkan files_created."""
+    before = snapshot_files(str(tmp_path))
+    dep = tmp_path / "vendor" / "autoload.php"
+    dep.parent.mkdir(parents=True)
+    dep.write_text("<?php")
+    nm = tmp_path / "node_modules" / "pkg" / "i.js"
+    nm.parent.mkdir(parents=True)
+    nm.write_text("x")
+    after = snapshot_files(str(tmp_path))
+    assert count_created_files(before, after) == 0
+
+
 def test_scoreboard_roundtrip(tmp_path):
     sb = Scoreboard(tmp_path / "sb.sqlite")
     sb.record("model-a", 80)

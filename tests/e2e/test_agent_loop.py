@@ -1,9 +1,15 @@
+import tempfile
+
 from dhybrid.agent.loop import AgentLoop, LoopConfig
 from dhybrid.agent.router import HybridRouter
 from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.efficiency.context import ContextManager
 from dhybrid.llm.base import ChatMessage, ChatResponse, LLMClient, StreamEvent, Usage
 from dhybrid.tools.registry import ToolRegistry
+
+# cwd kosong yang stabil supaya snapshot_files deterministik (tidak bocor
+# isi repo ke bukti "files_created" saat unit test).
+EMPTY_CWD = tempfile.mkdtemp(prefix="dhybrid_loop_")
 
 
 class ScriptedClient(LLMClient):
@@ -50,6 +56,7 @@ def test_loop_tool_then_final():
         _tools(),
         ContextManager(),
         TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
     )
     res = loop.run("cari x", "kamu agent")
     assert res.final_text == "ketemu: line 1"
@@ -62,6 +69,7 @@ def test_loop_early_stop_signal():
         _tools(),
         ContextManager(),
         TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
     )
     res = loop.run("cek", "sys")
     assert res.stopped_early
@@ -73,6 +81,7 @@ def test_loop_budget_hard_stop():
         _tools(),
         ContextManager(),
         TokenBudget(soft=10, hard=15),  # setiap step +15 → habis cepat
+        cwd=EMPTY_CWD,
         cfg=LoopConfig(max_steps=10),
     )
     res = loop.run("cari", "sys")
@@ -83,7 +92,7 @@ def test_loop_escalates_to_big_on_errors():
     small = ScriptedClient(["errtool", "errtool", "text:jawaban kecil"], name="small")
     big = ScriptedClient(["text:jawaban besar"], name="big")
     router = HybridRouter(big_client=big, small_client=small, cache=None)
-    loop = AgentLoop(router, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(router, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("jalankan pytest lalu perbaiki", "sys")
     assert res.escalated
     assert res.final_text == "jawaban besar"
@@ -119,7 +128,7 @@ def test_loop_text_mode_tool_fallback():
     """Mode teks: hasil tool dikirim sebagai pesan USER, tanpa tool_calls native —
     kompatibel dengan model yang menolak format native (mis. zen 400)."""
     client = TextToolClient()
-    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("cari x", "sys")
     assert res.final_text == "ketemu: line 1"
     assert res.steps == 2
@@ -127,6 +136,37 @@ def test_loop_text_mode_tool_fallback():
     assert "tool" not in roles                      # tidak ada role:tool
     assert not any(m.tool_calls for m in client.last_messages)  # tidak ada tool_calls native
     assert any("[Hasil tool 'grep']" in m.content for m in client.last_messages if m.role == "user")
+
+
+def test_build_question_escalates_even_with_chain_available():
+    """Regresi utama: task MEMBANGUN yang diakhiri pertanyaan → jangan
+    dianggap selesai; saat escalation chain tersedia, langsung naik model
+    (sebelumnya jawaban pertanyaan semacam ini justru di-final-kan 'DONE')."""
+    low = ScriptedClient(["text:Apakah lebih baik pakai stack A atau stack B dulu?"], name="low")
+    high = ScriptedClient(["text:Oke, pakai Laravel Breeze dan langsung buat sekarang"], name="high")
+
+    calls = []
+
+    def factory(preset_name: str):
+        calls.append(preset_name)
+        return high
+
+    loop = AgentLoop(
+        client_or_router=low,
+        tools=_tools(),
+        ctx=ContextManager(),
+        budget=TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(
+            quality_threshold=35,
+            escalation_chain=["high"],
+            max_escalations=1,
+        ),
+        client_factory=factory,
+    )
+    res = loop.run("buatkan login register", "sys")
+    assert res.escalated_quality is True        # tidak dibekukan sebagai DONE
+    assert calls == ["high"]                   # benar-benar pindah ke model kuat
 
 
 class QuestionClient(LLMClient):
@@ -156,7 +196,7 @@ def test_loop_nudges_build_request_to_act():
     """User minta dibuatkan, model balik bertanya tanpa kerja → loop menyodok
     sekali agar langsung eksekusi, lalu lanjut."""
     client = QuestionClient()
-    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("buatkan login register", "sys")
     assert client.calls == 2
     assert "app.py" in res.final_text
@@ -166,13 +206,14 @@ def test_loop_nudges_build_request_to_act():
 def test_loop_no_nudge_for_non_build_question():
     """Bukan permintaan membangun → pertanyaan dibiarkan apa adanya."""
     client = QuestionClient()
-    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("jelaskan apa itu python", "sys")
     assert client.calls == 1
     assert res.final_text == "Mau pakai stack apa?"
 
-def test_loop_nudge_only_once():
-    """Kalau model tetap bertanya setelah nudge → berhenti (tidak loop selamanya)."""
+def test_loop_nudge_build_question_is_bounded():
+    """Build yang terus bertanya → disodok lebih gigih (max_nudges*2) tapi TETAP bounded,
+    tidak loop tanpa batas, dan tidak pernah disangkakan 'selesai' saat masih bertanya."""
 
     class Stubborn(QuestionClient):
         def stream(self, messages, **kw):
@@ -182,9 +223,10 @@ def test_loop_nudge_only_once():
             yield StreamEvent(kind="done", usage=Usage(5, 5))
 
     s = Stubborn()
-    loop = AgentLoop(s, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(s, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("buatkan aplikasi", "sys")
-    assert s.calls == 4  # 1 asli + 3 nudge (max_nudges=3), lalu berhenti
+    # 1 jawaban asli + (max_nudges*2 = 6) nudge pilih-default, lalu berhenti
+    assert s.calls == 1 + loop.cfg.max_nudges * 2
     assert res.final_text == "Stack apa dulu?"
 
 
@@ -214,7 +256,7 @@ class PromiseClient(LLMClient):
 def test_loop_nudges_promise_to_execute():
     """Model cuma berjanji (tidak ada file dibuat) → disodok 'EKSEKUSI sekarang'."""
     client = PromiseClient()
-    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("buatkan aplikasi login", "sys")
     assert client.calls == 2
     assert "app.js" in res.final_text
@@ -247,7 +289,7 @@ class SilentAfterToolClient(LLMClient):
 def test_loop_nudges_silent_model_to_answer():
     """Model pakai tool lalu diam (jawaban kosong) → loop menyodok 'beri jawaban'."""
     client = SilentAfterToolClient()
-    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9))
+    loop = AgentLoop(client, _tools(), ContextManager(), TokenBudget(soft=10**9, hard=10**9), cwd=EMPTY_CWD)
     res = loop.run("cari x", "sys")
     assert client.calls == 3  # tool → diam(nudge) → jawab
     assert res.final_text == "Selesai: hasil ditemukan"
@@ -259,6 +301,7 @@ def test_loop_tool_errors_dont_loop_forever():
         _tools(),
         ContextManager(),
         TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
         cfg=LoopConfig(max_steps=4),
     )
     res = loop.run("x", "sys")
@@ -287,6 +330,7 @@ def test_quality_escalation_chain():
             max_escalations=1,
             max_nudges=1,
         ),
+        cwd=EMPTY_CWD,
         client_factory=factory,
     )
     res = loop.run("jelaskan arsitektur sistem", "sys")
@@ -321,6 +365,7 @@ def test_quality_rejects_disabled_preset_then_escalates():
             escalation_chain=["disabled-big", "good-big"],  # first gagal, second ok
             max_escalations=2,
         ),
+        cwd=EMPTY_CWD,
         client_factory=factory,
     )
     res = loop.run("jelaskan sistem", "sys")
@@ -349,6 +394,7 @@ def test_quality_no_escalation_when_passed():
             escalation_chain=["preset-high"],
             max_escalations=2,
         ),
+        cwd=EMPTY_CWD,
         client_factory=factory,
     )
     res = loop.run("jelaskan arsitektur", "sys")

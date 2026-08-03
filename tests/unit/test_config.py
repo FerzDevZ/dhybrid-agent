@@ -7,6 +7,15 @@ from dhybrid.dotenv import load_dotenv
 from dhybrid.llm.registry import ModelRegistry
 
 
+@pytest.fixture(autouse=True)
+def _all_providers_enabled(tmp_path, monkeypatch):
+    """Isolasi dari setting user nyata (~/.dhybrid/provider_enable.json):
+    paksa semua provider enabled supaya resolve/names deterministik."""
+    import dhybrid.ui.commands as cmds
+
+    monkeypatch.setattr(cmds, "PROVIDER_ENABLE_FILE", tmp_path / "provider_enable.json")
+
+
 def test_load_defaults_and_env_override(monkeypatch):
     monkeypatch.setenv("DHYBRID_MODEL", "test-model")
     cfg = Config.load("config/default.yaml")

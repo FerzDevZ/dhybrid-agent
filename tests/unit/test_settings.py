@@ -7,6 +7,14 @@ from dhybrid.session.context import SessionContext
 from dhybrid.session.store import SessionStore
 
 
+@pytest.fixture(autouse=True)
+def _all_providers_enabled(tmp_path, monkeypatch):
+    """Isolasi dari setting user nyata (~/.dhybrid/provider_enable.json)."""
+    import dhybrid.ui.commands as cmds
+
+    monkeypatch.setattr(cmds, "PROVIDER_ENABLE_FILE", tmp_path / "provider_enable.json")
+
+
 @pytest.fixture
 def ctx(tmp_path, monkeypatch):
     import dhybrid.session.userconfig as uc

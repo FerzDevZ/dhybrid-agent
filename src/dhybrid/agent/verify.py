@@ -6,21 +6,45 @@ git berubah? Ini mengubah 'kata model' menjadi 'fakta sistem'.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+# Dependensi / artifact — BUKAN pekerjaan user. Jangan dihitung sebagai
+# "file dibuat" (mis. composer install → vendor/ bisa puluhan ribu file,
+# bikin angka `files_created` tak masuk akal & menyesatkan).
+IGNORED_DIRNAMES = {
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "venv",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    ".next",
+    "target",
+    "logs",
+    ".idea",
+    ".vscode",
+}
 
 
 def snapshot_files(cwd: str) -> set[str]:
-    """Relatif path semua file di bawah cwd (abaikan .git, __pycache__)."""
+    """Relatif path semua file di bawah cwd (abaikan .git, __pycache__, & folder dependensi)."""
     root = Path(cwd)
     if not root.exists():
         return set()
     out: set[str] = set()
-    for p in root.rglob("*"):
-        if p.is_file():
-            rel = p.relative_to(root).as_posix()
-            if rel.startswith((".git/", "__pycache__/", ".pytest_cache/")):
-                continue
-            out.add(rel)
+    for dirpath, dirnames, filenames in os.walk(os.fspath(root)):
+        # prune folder dependensi supaya tidak ditelusuri sama sekali (cepat + tidak mengacungkan angka)
+        dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRNAMES]
+        rel_dir = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        for f in filenames:
+            out.add(f"{rel_dir}/{f}" if rel_dir != "." else f)
     return out
 
 
