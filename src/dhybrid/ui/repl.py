@@ -59,6 +59,7 @@ def run_agent(ctx, prompt: str, push_prompt: bool = True) -> LoopResult:
         cwd=ctx.cwd,
         client_factory=_client_factory if chain else None,
         ask_state=ctx.ask_state,
+        clarify_state=getattr(ctx, "clarify_state", None),
     )
     result = loop.run(prompt, ctx.system_prompt, push_prompt=push_prompt)
 
