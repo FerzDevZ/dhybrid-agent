@@ -12,7 +12,7 @@ Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first
 - **12 teknik hemat token** — lazy policies, context compaction, prompt caching (Anthropic cache_control), tool output cap, diff-based edit, semantic cache, early-stop, dsb.
 - **Multi-provider cloud** — OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek, byNara (satu adaptor OpenAI-compatible + adaptor Anthropic native), plus route gratis opencode-zen & byNara.
 - **Tool lengkap** — terminal (dengan gerbang keamanan), read/write range, apply_patch diff-minimal, grep/find, git (commit aman), pytest runner, TDD status, todo, memory jangka panjang (FTS5), subagent delegation.
-- **Sesi & memori** — SQLite local di `~/.dhybrid/`, resume sesi via ringkasan, dashboard token & biaya.
+- **Sesi & memori** — SQLite local di `~/.dhybrid/`, resume sesi via ringkasan, dashboard token & biaya. `dhybrid repl` otomatis meneruskan sesi terakhir di proyek yang sama (konteks & judul dimuat ulang, tidak mulai kosong); fakta memori jangka panjang proyek jalan di-inject ke awal sesi.
 - **Skills** — folder `skills/<nama>/SKILL.md`, auto-inject berdasar relevansi.
 
 ## Install
@@ -42,7 +42,8 @@ cp .env.example .env             # isi API key yang kamu punya
 ## Quickstart
 
 ```bash
-dhybrid repl                     # sesi interaktif
+dhybrid repl                     # sesi interaktif — auto-resume sesi terakhir proyek ini
+dhybrid repl --fresh             # mulai sesi BARU (lewat konteks lama)
 dhybrid run "perbaiki bug di calc.py lalu jalankan test"
 dhybrid --cwd /path/proyek repl  # kerja di proyek lain
 dhybrid tokens                   # dashboard token & biaya semua sesi

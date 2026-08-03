@@ -54,15 +54,35 @@ class SessionContext:
         cwd: str = ".",
         sid: str | None = None,
         yes_mode: bool = False,
+        resume: bool = False,
     ):
         self.cfg = cfg
         self.store = store
         self.cwd = cwd
         self.workspace = cfg.workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
-        self.sid = sid or store.new_session()
+        # ---- auto-resume: lanjutkan sesi terakhir di proyek yang sama ----
+        # (Task 6) `dhybrid repl` tidak "reset" — konteks & judul sesi lama dimuat.
+        # Cari sesi SEBELUM membuat yang baru, supaya `new_session` tidak menjadi
+        # "terakhir" dan menutupi sesi lama (bug: resume tidak pernah trigger).
+        self.resumed_id: str | None = None
+        self._resume_meta: dict | None = None
+        if sid is None and resume:
+            prev = store.last_session_for_cwd(cwd)
+            if prev and any(store.last_messages(prev, n=1)):
+                self.resumed_id = prev
+                self._resume_meta = store.get_session(prev)
+        self.sid = sid or self.resumed_id or store.new_session(cwd=cwd)
         self.budget = TokenBudget(soft=cfg.budget.get("soft", 60000), hard=cfg.budget.get("hard", 120000))
         self.ctx = ContextManager(keep_recent=cfg.context.get("keep_recent", 8))
+        # muat ringkasan & pesan terakhir sesi yang di-resume ke konteks awal
+        if self.resumed_id:
+            self.ctx.summary = (self._resume_meta or {}).get("summary") or None
+            from dhybrid.llm.base import ChatMessage
+
+            for m in store.last_messages(self.resumed_id, n=6):
+                self.ctx.push(ChatMessage(role=m["role"], content=m.get("content") or ""))
+            self._resume_meta = None
         self.cache = PromptCache(db_path=self.workspace / "cache.sqlite")
         self.registry = ModelRegistry(cfg)
         self.model_cfg = cfg.model  # SATU model — dipilih user, tanpa backup
@@ -86,8 +106,16 @@ class SessionContext:
         self.disabled_skills: set[str] = set()
         self.skills: list = []
         self.reload_skills(cwd)
+        # ---- (Task 5) inject fakta memori jangka panjang ke konteks awal ----
+        # Agent langsung "ingat" konvensi/keputusan proyek, tidak mulai kosong.
+        memory_digest = self.memory.recent(limit=8)
+        memory_block = (
+            f"\n\n[JANGAN DICARI ULANG] Proyek/workspace ini punya catatan:\n{memory_digest}"
+            if memory_digest else ""
+        )
         self.system_prompt = (
             build_system_prompt(BASE_PROMPT.replace("{workspace_path}", cwd), workspace_hint=cwd)
+            + memory_block
             + "\n\n"
             + self.tools.spec_text()
         )

@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     created TEXT,
     title TEXT,
     summary TEXT,
-    final_text TEXT
+    final_text TEXT,
+    cwd TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,15 +52,34 @@ class SessionStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.executescript(SCHEMA)
+        # migrasi: DB lama (tanpa kolom cwd) → tambahkan kolom
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(sessions)")}
+        if "cwd" not in cols:
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN cwd TEXT")
+            self.conn.commit()
 
-    def new_session(self, title: str = "untitled") -> str:
+    def new_session(self, title: str = "untitled", cwd: str | None = None) -> str:
         sid = uuid.uuid4().hex[:12]
         self.conn.execute(
-            "INSERT INTO sessions VALUES (?,?,?,?,?)",
-            (sid, _now(), title, "", ""),
+            "INSERT INTO sessions (id, created, title, summary, final_text, cwd) VALUES (?,?,?,?,?,?)",
+            (sid, _now(), title, "", "", cwd or ""),
         )
         self.conn.commit()
         return sid
+
+    def last_session_for_cwd(self, cwd: str) -> str | None:
+        """Sesi terbaru untuk proyek (cwd) tertentu — dipakai auto-resume."""
+        row = self.conn.execute(
+            "SELECT id FROM sessions WHERE cwd=? ORDER BY created DESC LIMIT 1",
+            (cwd,),
+        ).fetchone()
+        return row[0] if row else None
+
+    def session_cwd(self, sid: str) -> str:
+        row = self.conn.execute(
+            "SELECT cwd FROM sessions WHERE id=?", (sid,)
+        ).fetchone()
+        return row[0] if row else ""
 
     def append_message(self, sid: str, role: str, content: str, tool_calls=None) -> None:
         self.conn.execute(

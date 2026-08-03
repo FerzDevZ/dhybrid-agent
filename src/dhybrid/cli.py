@@ -15,18 +15,18 @@ from dhybrid.ui.render import style
 from dhybrid.ui.repl import repl_loop, run_agent
 
 
-def _build_context(args) -> SessionContext:
+def _build_context(args, resume: bool = False) -> SessionContext:
     cfg = Config.load(Path(args.config) if args.config else None)
     store = SessionStore(cfg.workspace / "sessions.sqlite")
     cwd = args.cwd or "."
-    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False))
+    ctx = SessionContext(cfg, store, cwd=cwd, yes_mode=getattr(args, "yes", False), resume=resume)
     if getattr(args, "model", None):
         ctx.set_model(args.model)
     return ctx
 
 
 def cmd_repl(args) -> int:
-    ctx = _build_context(args)
+    ctx = _build_context(args, resume=not getattr(args, "fresh", False))
     return repl_loop(ctx)
 
 
@@ -154,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command")
 
     repl = sub.add_parser("repl", help="sesi interaktif (default saat tanpa subcommand)")
+    repl.add_argument("--fresh", action="store_true",
+                      help="mulai sesi BARU (jangan auto-resume sesi terakhir di proyek ini)")
     run = sub.add_parser("run", help="satu prompt sekali jalan")
     run.add_argument("prompt")
     tok = sub.add_parser("tokens", help="dashboard token & biaya")

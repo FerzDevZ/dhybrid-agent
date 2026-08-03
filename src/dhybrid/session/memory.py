@@ -51,6 +51,16 @@ class MemoryStore:
             return "(tidak ada memori cocok)"
         return "\n".join(f"[{k}] {v[:200]}" for k, v in rows)
 
+    def recent(self, limit: int = 8) -> str:
+        """Fakta memori terbaru (untuk di-inject ke system prompt saat sesi mulai)."""
+        rows = self.conn.execute(
+            "SELECT key, value FROM memory ORDER BY updated DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        if not rows:
+            return ""
+        return "\n".join(f"• {key}: {value[:220]}" for key, value in rows)
+
     def forget(self, key: str) -> str:
         self.conn.execute("DELETE FROM memory WHERE key=?", (key,))
         self.conn.execute("DELETE FROM memory_fts WHERE key=?", (key,))

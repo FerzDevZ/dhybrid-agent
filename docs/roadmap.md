@@ -13,7 +13,7 @@
 ## v0.2.0 — kekuatan
 - [x] MCP tools (adaptor `tools/mcp.py` + preset `mcp_servers` di config)
 - [~] Browser tool — ada `tools/web.py` (fetch HTTP); browser penuh (CDP) belum
-- [ ] Multi-workspace & per-project memory
+- [x] Multi-workspace & per-project memory (auto-resume sesi per proyek + fakta memori di-inject ke konteks)
 - [ ] Auto skill creation dari sesi sukses (Hermes-style)
 - [ ] `dhybrid init` wizard onboarding
 - [ ] Fallback escalation yang aman (skip provider disabled / tanpa key valid)

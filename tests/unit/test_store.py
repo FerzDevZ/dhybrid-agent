@@ -33,3 +33,40 @@ def test_memory_roundtrip_and_fts(tmp_path):
     assert "proyek" in hit
     mem.forget("proyek")
     assert "tidak ada" in mem.recall("proyek")
+
+
+def test_memory_recent_returns_facts(tmp_path):
+    mem = MemoryStore(tmp_path / "m.sqlite")
+    assert mem.recent() == ""  # kosong
+    mem.remember("a", "fakta satu")
+    mem.remember("b", "fakta dua")
+    out = mem.recent(limit=2)
+    assert "fakta satu" in out and "fakta dua" in out
+    assert "a:" in out and "b:" in out
+
+
+def test_session_cwd_and_last_session_for_cwd(tmp_path):
+    store = SessionStore(tmp_path / "s.sqlite")
+    assert store.last_session_for_cwd("/proyek/a") is None
+    sa = store.new_session(cwd="/proyek/a")
+    store.append_message(sa, "user", "hai")
+    sb = store.new_session(cwd="/proyek/a")  # lebih baru
+    # yang terakhir di cwd sama → sb
+    assert store.last_session_for_cwd("/proyek/a") == sb
+    assert store.last_session_for_cwd("/proyek/b") is None
+    assert store.session_cwd(sa) == "/proyek/a"
+
+
+def test_store_migrates_adding_cwd_column(tmp_path):
+    """DB lama (tanpa kolom cwd) → migrasi otomatis menambah kolom cwd."""
+    import sqlite3
+
+    db = tmp_path / "old.sqlite"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE sessions (id TEXT, created TEXT, title TEXT, summary TEXT, final_text TEXT)")
+    conn.commit()
+    conn.close()
+
+    store = SessionStore(db)  # harus tidak crash + cwd tersedia
+    sid = store.new_session(cwd="/x")
+    assert store.session_cwd(sid) == "/x"
