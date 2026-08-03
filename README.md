@@ -10,7 +10,7 @@ Referensi desain: Hermes Agent (skills, memory, sessions), OpenClaw (local-first
 
 - **Satu model, pilih bebas** — satu model utama yang bisa diganti kapan saja (preset / manual) via `/settings`; router hybrid kecil/besar tetap tersedia sebagai opsi config `small_model`.
 - **12 teknik hemat token** — lazy policies, context compaction, prompt caching (Anthropic cache_control), tool output cap, diff-based edit, semantic cache, early-stop, dsb.
-- **Multi-provider cloud** — OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek (satu adaptor OpenAI-compatible + adaptor Anthropic native).
+- **Multi-provider cloud** — OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek, byNara (satu adaptor OpenAI-compatible + adaptor Anthropic native), plus route gratis opencode-zen & byNara.
 - **Tool lengkap** — terminal (dengan gerbang keamanan), read/write range, apply_patch diff-minimal, grep/find, git (commit aman), pytest runner, TDD status, todo, memory jangka panjang (FTS5), subagent delegation.
 - **Sesi & memori** — SQLite local di `~/.dhybrid/`, resume sesi via ringkasan, dashboard token & biaya.
 - **Skills** — folder `skills/<nama>/SKILL.md`, auto-inject berdasar relevansi.
@@ -65,9 +65,11 @@ dhybrid repl --model gemini-fast       # model kecil = Gemini Flash
 export DHYBRID_MODEL=gpt-4o            # atau via env
 ```
 
-Preset tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `opencode-zen-*` (9 preset route https://opencode.ai/zen/v1 — 6 di antaranya **gratis tanpa API key**: fast/big/codex/nemotron/laguna/ling/mimo/north, model `*-free`).
+Preset tersedia (21): `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `bynara-fast/medium/big` (route `https://router.bynara.id/v1`), dan `opencode-zen-*` (9 preset route https://opencode.ai/zen/v1 — 6 di antaranya **gratis tanpa API key**: fast/big/codex/nemotron/laguna/ling/mimo/north, model `*-free`).
 
-**Default model = route opencode zen gratis** (`deepseek-v4-flash-free`): dhybrid langsung bisa dipakai TANPA API key. Ganti model kapan saja via `/settings` (bisa input model manual) atau `dhybrid --model <preset>`.
+**Default model = Gemini** (`gemini-flash-latest`, via `/v1beta/openai`). Tanpa key Gemini, dhybrid jalan sebagai chatbot hanya dengan provider yang punya key; pilih model kapan saja via `/settings` (bisa input manual) atau `dhybrid --model <preset>`.
+
+**Provider toggle** — hidup/matikan provider lewat `/settings` (opsi 5). Provider yang dinonaktifkan tidak akan dipakai sebagai model utama maupun di escalation chain.
 
 ## Hemat Token — Cara Kerja
 
