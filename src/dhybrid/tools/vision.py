@@ -148,10 +148,10 @@ def read_image(path: str = "", prompt: str = "") -> str:
 def register(reg) -> None:
     reg.register(
         "read_image",
-        read_image,
+        "Baca gambar/screenshot jadi teks: vision LLM (byNara default), fallback OCR lokal tanpa API key.",
         {
             "path": {"type": "string", "required": True},
             "prompt": {"type": "string"},
         },
-        "Baca gambar/screenshot jadi teks: vision LLM (byNara default), fallback OCR lokal tanpa API key.",
+        read_image,
     )

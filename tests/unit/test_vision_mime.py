@@ -1,5 +1,21 @@
 """Task 8: deteksi MIME gambar — magic bytes PNG/JPEG + python-magic opsional."""
 from dhybrid.tools import vision
+from dhybrid.tools.registry import ToolRegistry
+
+
+def _reg():
+    reg = ToolRegistry()
+    vision.register(reg)
+    return reg
+
+
+def test_read_image_registered_in_urutan_benar(tmp_path):
+    # regresi: dulu fn & description tertukar → "'str' object is not callable"
+    reg = _reg()
+    f = tmp_path / "fake.png"
+    f.write_text("ini teks, bukan gambar")
+    out = reg.execute("read_image", {"path": str(f)})
+    assert "bukan gambar" in out
 
 
 def test_is_image_png_bytes():

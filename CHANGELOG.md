@@ -4,6 +4,39 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-08-03
+
+### Power-up pip packages (extra `power`) — 5 tool baru + MIME detect
+
+Tool baru berbasis package populer, semuanya **soft-register**: kalau
+package belum terpasang, tool tidak merusak startup & dipanggil → pesan
+install ramah (`pip install -e '.[power]'`). Allowlist default 31 → **36**.
+- `sys_info` (psutil) — CPU/RAM/disk/proses: cek kesehatan sistem.
+- `scaffold` (jinja2) — generate banyak file dari template, render variabel,
+  aman anti path-traversal (symlink keluar dir diblokir).
+- `data_query` (duckdb) — SQL **read-only** langsung ke CSV/JSONL/Parquet;
+  query tulis (CREATE/INSERT/DROP/dst) diblokir di level kode, hasil dipotong.
+- `pdf_ops` (pypdf) — merge beberapa PDF jadi satu.
+- `xlsx_edit` (openpyxl) — set cell / append baris; hasil ke file SALINAN
+  (file asli tidak pernah diubah).
+- Deteksi MIME gambar (magic bytes PNG/JPEG + python-magic opsional) di
+  `read_image` & `/pasteshot` — non-gambar ditolak dengan pesan jelas.
+
+### Auto-skill lebih banyak & lebih cerdas
+
+- **Skill pengetahuan dari Q&A berulang** — pertanyaan yang sama/jenis sama
+  (token_set_ratio ≥75%) dijawab substantif → disimpan sebagai skill
+  knowledge tanpa syarat file dibuat (sebelumnya Q&A tidak pernah jadi skill).
+- **Update skill lama** — sesi baru dengan langkah lebih lengkap menimpa
+  skill LAMA yang lahir dari auto-skill (description mengandung "skill
+  otomatis"); skill buatan tangan user tidak pernah disentuh.
+- **Digest kandidat skill di akhir sesi** — setelah ≥5 run, task nyata yang
+  gagal dapat nama bermakna ditawarkan bernomor: Enter = simpan semua,
+  nomor = pilih satu, 0 = skip. Muncul 1x/sesi.
+- **Saran skill saat fallback general ≥3x** — prompt berulang yang tak
+  tertangkap skill spesifik → tawaran membuat skill (sekali/sesi, Enter = skip).
+- **Lint skill** — frontmatter rusak/nama tidak valid di-skip tanpa crash.
+
 ## [0.8.2] - 2026-08-03
 
 ### Baris DONE jujur — tidak ada lagi "DONE — kualitas 100/100 · 0 file"

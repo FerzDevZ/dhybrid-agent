@@ -87,11 +87,11 @@ def test_cmd_pasteshot_saves_clipboard(tmp_path, monkeypatch):
     from dhybrid.ui import commands
 
     monkeypatch.setattr(commands.Path, "home", staticmethod(lambda: tmp_path))
-    monkeypatch.setattr(commands, "_clipboard_image_bytes", lambda: b"\x89PNG\r\nclipdata")
+    monkeypatch.setattr(commands, "_clipboard_image_bytes", lambda: b"\x89PNG\r\n\x1a\nclipdata")
     commands.cmd_pasteshot(NS(), "ss")
     out = tmp_path / ".dhybrid" / "captures" / "ss.png"
     assert out.exists()
-    assert out.read_bytes() == b"\x89PNG\r\nclipdata"
+    assert out.read_bytes() == b"\x89PNG\r\n\x1a\nclipdata"
 
 
 def test_cmd_pasteshot_empty_clipboard(tmp_path, monkeypatch):
