@@ -151,6 +151,18 @@ class SessionContext:
         self.fallback_uses = 0
         self.skill_suggested = False
         self.run_count = 0
+        # ---- (0.9.5) load persisted state counters (checkpoint) ----
+        if sid is not None or resume:
+            state = self.store.load_checkpoint(self.sid)
+            if state:
+                self.steps = state.get("steps", 0)
+                self.run_count = state.get("run_count", 0)
+                self.fallback_uses = state.get("fallback_uses", 0)
+                self.last_cost = state.get("last_cost", 0.0)
+                self.qa_history = state.get("qa_history", [])
+                self.skill_candidates = state.get("skill_candidates", [])
+                self.skill_digest_shown = state.get("skill_digest_shown", False)
+                self.skill_suggested = state.get("skill_suggested", False)
 
     # ---------- build ----------
 
@@ -292,3 +304,26 @@ class SessionContext:
             usage.cached_tokens,
             cost,
         )
+
+    # ---------- checkpoint: persist in-memory counters ke SQLite ----
+    def save_checkpoint(self) -> None:
+        """Persist state counters (run_count, fallback_uses, steps, qa_history,
+        skill_candidates, last_cost) ke session_state table — agar survive
+        restart & support resume turn."""
+        self.store.save_checkpoint(
+            self.sid,
+            {
+                "steps": self.steps,
+                "run_count": self.run_count,
+                "fallback_uses": self.fallback_uses,
+                "last_cost": self.last_cost,
+                "qa_history": self.qa_history,
+                "skill_candidates": self.skill_candidates,
+                "skill_digest_shown": self.skill_digest_shown,
+                "skill_suggested": self.skill_suggested,
+            },
+        )
+
+    def load_checkpoint(self) -> dict | None:
+        """Load persisted state (bisa panggil di __init__ bila resume)."""
+        return self.store.load_checkpoint(self.sid)

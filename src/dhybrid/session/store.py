@@ -20,6 +20,12 @@ CREATE TABLE IF NOT EXISTS sessions (
     final_text TEXT,
     cwd TEXT
 );
+CREATE TABLE IF NOT EXISTS session_state (
+    session_id TEXT PRIMARY KEY,
+    state TEXT,
+    updated TEXT,
+    FOREIGN KEY(session_id) REFERENCES sessions(id)
+);
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT,
@@ -166,5 +172,23 @@ class SessionStore:
     def delete_session(self, sid: str) -> None:
         self.conn.execute("DELETE FROM usage WHERE session_id=?", (sid,))
         self.conn.execute("DELETE FROM messages WHERE session_id=?", (sid,))
+        self.conn.execute("DELETE FROM session_state WHERE session_id=?", (sid,))
         self.conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
         self.conn.commit()
+
+    # ---- checkpoint: persist state counters (run_count, fallback_uses, …) ----
+    def save_checkpoint(self, sid: str, state: dict) -> None:
+        self.conn.execute(
+            "INSERT INTO session_state (session_id, state, updated) "
+            "VALUES (?,?,?) "
+            "ON CONFLICT(session_id) DO UPDATE SET state=excluded.state, updated=excluded.updated",
+            (sid, json.dumps(state), _now()),
+        )
+        self.conn.commit()
+
+    def load_checkpoint(self, sid: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT state FROM session_state WHERE session_id=?",
+            (sid,),
+        ).fetchone()
+        return json.loads(row[0]) if row else None
