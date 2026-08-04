@@ -75,6 +75,26 @@ def _is_image_bytes(data: bytes) -> bool:
         return False
 
 
+def _is_media_bytes(data: bytes) -> bool:
+    """True bila bytes adalah media (image/audio/video) — magic bytes dulu,
+    lalu python-magic (extra power) bila tersedia."""
+    # Check image magic bytes first (PNG, JPEG)
+    if data[:8] == b"\x89PNG\r\n\x1a\n" or data[:2] == b"\xff\xd8":
+        return True
+    try:
+        import magic  # python-magic (extra power, opsional)
+
+        mime = magic.from_buffer(data, mime=True) or ""
+        return mime.startswith(("image/", "audio/", "video/"))
+    except (ImportError, Exception):  # noqa: BLE001 — magic tak ada/error
+        return False
+
+
+def _is_image_bytes_legacy(data: bytes) -> bool:
+    """Legacy wrapper - alias untuk _is_image_bytes untuk backward compat."""
+    return _is_image_bytes(data)
+
+
 def _ocr_local(path: str) -> str:
     """OCR offline tanpa API key. rapidocr-onnxruntime (ONNX, tanpa torch) →
     pytesseract → "" (tidak tersedia)."""
@@ -143,6 +163,13 @@ def read_image(path: str = "", prompt: str = "") -> str:
         "ERROR: tidak ada model vision (set BYNARA_API_KEY atau DHYBRID_VISION_*) "
         "dan OCR lokal belum terinstall. Pasang: pip install -e '.[vision]'"
     )
+
+
+_DEFAULT_PROMPT = (
+    "Jelaskan isi gambar ini secara detail: semua teks yang terlihat "
+    "(transkripsikan persis, termasuk kode/error), struktur/tata letak, dan "
+    "konteksnya. Kalau ada pesan error atau log, kutip baris pentingnya."
+)
 
 
 def register(reg) -> None:

@@ -1,8 +1,8 @@
-"""SessionStore — SQLite local-first (own-your-data ala OpenClaw).
+"""SessionStore — SQLite local-first + optional Redis persistence.
 
 Tabel: sessions, messages, usage. Semua data lokal, tanpa server.
+Redis layer: optional cross-instance state sync (fallback ke SQLite).
 """
-
 from __future__ import annotations
 
 import json
@@ -10,6 +10,18 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+
+try:
+    import redis  # type: ignore
+
+    REDIS_AVAILABLE = True
+    RedisError = redis.RedisError
+except ImportError:  # pragma: no cover
+    redis = None  # type: ignore
+    REDIS_AVAILABLE = False
+
+    class RedisError(Exception):
+        """Fallback RedisError when redis is not available."""
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -119,7 +131,7 @@ class SessionStore:
 
     def get_session(self, sid: str) -> dict | None:
         row = self.conn.execute(
-            "SELECT id, created, title, summary, final_text FROM sessions WHERE id=?", (sid,)
+            "SELECT id, created, title, summary, final_text, cwd FROM sessions WHERE id=?", (sid,)
         ).fetchone()
         if not row:
             return None
@@ -129,6 +141,7 @@ class SessionStore:
             "title": row[2],
             "summary": row[3] or "",
             "final_text": row[4] or "",
+            "cwd": row[5] or "",
         }
 
     def last_messages(self, sid: str, n: int = 5) -> list[dict]:
@@ -192,3 +205,66 @@ class SessionStore:
             (sid,),
         ).fetchone()
         return json.loads(row[0]) if row else None
+
+
+class RedisStore(SessionStore):
+    """SessionStore with optional Redis persistence for cross-instance state sync.
+
+    Falls back to SQLite when Redis is unavailable or errors occur.
+    """
+
+    def __init__(
+        self,
+        db_path: Path | None = None,
+        redis_client=None,
+        redis_url: str | None = None,
+    ):
+        # Initialize SQLite first
+        super().__init__(db_path)
+        self.redis = redis_client
+
+        if redis_client is None and REDIS_AVAILABLE and redis_url:
+            try:
+                self.redis = redis.from_url(redis_url)
+                # Test connection
+                self.redis.ping()
+            except RedisError:
+                self.redis = None
+
+    def _redis_key(self, sid: str) -> str:
+        return f"sess:{sid}:state"
+
+    def save_checkpoint(self, sid: str, state: dict) -> None:
+        # Always save to SQLite first
+        super().save_checkpoint(sid, state)
+
+        # Then try Redis
+        if self.redis is not None:
+            try:
+                self.redis.set(self._redis_key(sid), json.dumps(state))
+            except RedisError:
+                pass  # Fail silently, SQLite has the data
+
+    def load_checkpoint(self, sid: str) -> dict | None:
+        # Try Redis first
+        if self.redis is not None:
+            try:
+                data = self.redis.get(self._redis_key(sid))
+                if data:
+                    return json.loads(data)
+            except RedisError:
+                pass
+
+        # Fallback to SQLite
+        return super().load_checkpoint(sid)
+
+    def append_message(self, sid: str, role: str, content: str, tool_calls=None) -> None:
+        super().append_message(sid, role, content, tool_calls)
+        if self.redis is not None:
+            try:
+                # Optionally sync message to Redis for cross-instance access
+                key = f"sess:{sid}:messages"
+                self.redis.lpush(key, json.dumps({"role": role, "content": content, "created": _now()}))
+                self.redis.ltrim(key, 0, 99)  # Keep last 100
+            except RedisError:
+                pass

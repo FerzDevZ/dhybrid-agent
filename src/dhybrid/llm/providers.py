@@ -9,12 +9,18 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Iterator
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from dhybrid.config import ModelConfig
+from dhybrid.efficiency.metrics import api_errors
 from dhybrid.llm.base import (
     ChatMessage,
     ChatResponse,
@@ -26,6 +32,19 @@ from dhybrid.llm.base import (
 
 RETRIES = 3
 TIMEOUT = 300.0
+
+
+def _retry_decorator():
+    """Decorator retry dengan exponential backoff + increment api_errors pada failure."""
+    return retry(
+        reraise=True,
+        stop=stop_after_attempt(RETRIES),
+        wait=wait_exponential(multiplier=2, min=1, max=10),
+        retry=retry_if_exception_type(httpx.HTTPError),
+        after=lambda retry_state: api_errors.inc()
+        if retry_state.outcome.failed
+        else None,
+    )
 
 
 class OpenAICompatClient(LLMClient):
@@ -51,20 +70,14 @@ class OpenAICompatClient(LLMClient):
             payload["stop"] = kw["stop"]
         return payload
 
+    @_retry_decorator()
     def _post(self, payload: dict) -> httpx.Response:
-        last_err: Exception | None = None
-        for attempt in range(RETRIES):
-            try:
-                return httpx.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=self._headers(),
-                    json=payload,
-                    timeout=TIMEOUT,
-                )
-            except httpx.HTTPError as e:
-                last_err = e
-                time.sleep(2**attempt)
-        raise last_err  # type: ignore[misc]
+        return httpx.post(
+            f"{self.base_url}/chat/completions",
+            headers=self._headers(),
+            json=payload,
+            timeout=TIMEOUT,
+        )
 
     def stream(self, messages: list[ChatMessage], **kw) -> Iterator[StreamEvent]:
         payload = self._payload(messages, **kw)
@@ -242,20 +255,14 @@ class AnthropicClient(LLMClient):
             system_blocks[-1]["cache_control"] = {"type": "ephemeral"}
         return {"system": system_blocks, "messages": out}
 
+    @_retry_decorator()
     def _post(self, payload: dict) -> httpx.Response:
-        last_err: Exception | None = None
-        for attempt in range(RETRIES):
-            try:
-                return httpx.post(
-                    f"{self.base_url}/messages",
-                    headers=self._headers(),
-                    json=payload,
-                    timeout=TIMEOUT,
-                )
-            except httpx.HTTPError as e:
-                last_err = e
-                time.sleep(2**attempt)
-        raise last_err  # type: ignore[misc]
+        return httpx.post(
+            f"{self.base_url}/messages",
+            headers=self._headers(),
+            json=payload,
+            timeout=TIMEOUT,
+        )
 
     def _payload(self, messages: list[ChatMessage], **kw) -> dict:
         body = self._to_anthropic(messages)
