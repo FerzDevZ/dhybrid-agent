@@ -47,6 +47,49 @@ def print_done(text: str) -> None:
         print(text)
 
 
+def render_progress(label: str = "memproses..."):
+    """Context manager spinner rich — polos (no-op) bila rich/NO_COLOR/TTY-off.
+
+    Pakai:
+        with render_progress("menyelesaikan task"):
+            ... lama ...
+    """
+    if _NO_COLOR or not _console().is_terminal:
+        from contextlib import nullcontext
+        return nullcontext()
+    try:
+
+        return _ProgressCtx(label)
+    except Exception:  # noqa: BLE001 — rich tak tersedia
+        from contextlib import nullcontext
+        return nullcontext()
+
+
+class _ProgressCtx:
+    """Wrapper context manager agar Progress.start()/.stop() otomatis."""
+
+    def __init__(self, label: str):
+        from rich.progress import Progress, SpinnerColumn, TextColumn
+
+        self._p = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True,
+            disable=not _console().is_terminal,
+        )
+        self._task = None
+        self._label = label
+
+    def __enter__(self):
+        self._task = self._p.add_task(self._label, total=None)
+        self._p.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._p.stop()
+        return False
+
+
 def print_tokens(
     label: str,
     totals: dict,

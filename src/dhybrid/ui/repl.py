@@ -9,6 +9,7 @@ from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
 from dhybrid.llm.base import ChatMessage
 from dhybrid.skills.loader import extract_skill_mentions, inject_skills, select_skills
+from dhybrid.ui import rich_ui
 from dhybrid.ui.commands import handle_command
 from dhybrid.ui.render import stream_print, style
 from dhybrid.ui.status import (
@@ -106,8 +107,10 @@ def check_update_notice() -> str | None:
 def show_welcome(ctx) -> None:
     """Banner + menu utama lengkap (muncul setiap kali dhybrid dijalankan)."""
     print(style(BANNER, "36"))
-    print(style(f"  dhybrid-agent v{__version__} — coding agent hemat token (hybrid routing)", "1;36"))
-    print(f"  model utama : {ctx.current_model_label()}")
+    rich_ui.print_done(
+        f"  dhybrid-agent v{__version__} — coding agent hemat token (hybrid routing)\n"
+        f"  model utama : {ctx.current_model_label()}"
+    )
     if getattr(ctx, "resumed_id", None):
         title = (ctx.store.get_session(ctx.sid) or {}).get("title", "") or ""
         suffix = f" — {title}" if title else ""
@@ -351,7 +354,8 @@ def _run_one(ctx, raw: str) -> None:
 
     ctx.hooks.on_delta = _counting_delta
     try:
-        result = run_agent(ctx, prompt)
+        with rich_ui.render_progress("menyelesaikan task"):
+            result = run_agent(ctx, prompt)
         # tool ask_user dipanggil agent → tanya user, teruskan jawaban, lanjutkan
         while result.pending_question:
             pq = result.pending_question
