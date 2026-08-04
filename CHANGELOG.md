@@ -4,6 +4,37 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [0.9.5] - 2026-08-04
+
+### Power-up: observability, state persistence + unified LLM routing
+Elevasi dhybrid-agent dari CLI hemat token ke agen AI modular tingkat lanjut.
+- **Metrics module** (`efficiency/metrics.py`) — Counter + Histogram + Registry
+  in-memory (8 counter standar: tokens_*, api_calls/errors, turn_latency_ms, cost).
+- **Token counting akurat** (`efficiency/tokenizer.py`) — tiktoken per-model +
+  heuristic fallback untuk Claude/unknown, cache per-encoding, api_errors tracking.
+- **Session checkpoint** (`session/store.py`) — persist state counters (run_count,
+  fallback_uses, qa_history, skill_candidates) ke SQLite → resume turn & multi-session.
+- **Litellm routing** (`llm/litellm_client.py`) — provider utama via `make_client`
+  (openai/anthropic/litellm), 100+ provider via litellem.
+- **Rich UI** (`ui/rich_ui.py`) — banner DONE panel + spinner progress di run_agent.
+- **Structured logging** (`utils/log.py`) — JSON/text hybrid, machine-readable.
+- **Async I/O** (`utils/async_io.py`) — aiofiles wrapper, sync fallback.
+- **Prometheus exporter** (`efficiency/prometheus_exporter.py`) — export metrics
+  ke text exposition format (/metrics endpoint).
+
+### Files baru
+- `src/dhybrid/efficiency/metrics.py`, `tokenizer.py`, `prometheus_exporter.py`
+- `src/dhybrid/utils/log.py`, `async_io.py`
+- `scripts/smoke_095.py`, `tests/integration/test_095_features.py`
+- 5x `tests/unit/test_metrics.py`, `test_tokenizer.py`, `test_session_checkpoint.py`,
+  `test_repl_rich.py`, `test_log.py`, `test_async_io.py`, `test_prometheus_exporter.py`
+
+### Validation
+- 368 test lulus (361 existing + 7 baru), coverage 72% (≥65%).
+- ruff 0, smoke_095.py OK.
+
+---
+
 ## [0.9.0] - 2026-08-03
 
 ### Power-up pip packages (extra `power`) — 5 tool baru + MIME detect
