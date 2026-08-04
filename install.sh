@@ -15,6 +15,18 @@
 
 set -euo pipefail
 
+# ---- fix: cwd broken (stale PWD di shell lama / direktori dihapus/dipindah)
+# bikin semua operasi error "No such file or directory" — termasuk pip install
+# di dalam venv yang diciptakan di cwd broken. Deteksi via subshell sebelum cd:
+#   - `pwd -P` tak bisa resolve → broken
+#   - `[ -d . ]` gagal di cwd yang hilang
+# Paksa ke $HOME & pastikan resolve OK, semua operasi pakai path absolut. ----
+if ! (cd "$(pwd -P 2>/dev/null)" 2>/dev/null); then
+  printf 'ERROR: PWD broken (%s di shell ini) — direktori sudah dihapus/dipindah\natau shell lama (tmux/screen). Buka terminal baru, lalu jalankan ulang installer.\n' "${PWD:-unset}" >&2
+  exit 1
+fi
+cd "$HOME" 2>/dev/null || { printf 'ERROR: tidak bisa cd ke $HOME — periksa mount/home.\n' >&2; exit 1; }
+
 REPO_URL="${DHYBRID_REPO_URL:-https://github.com/FerzDevZ/dhybrid-agent.git}"
 BRANCH="${DHYBRID_BRANCH:-main}"
 INSTALL_DIR="${DHYBRID_INSTALL_DIR:-$HOME/.dhybrid-agent}"
