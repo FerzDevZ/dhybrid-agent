@@ -1,17 +1,19 @@
 """Tests for Java toolchain."""
-import pytest
 import subprocess
+
+import pytest
+
 from dhybrid.tools.java_toolchain import (
-    mvn_test,
-    mvn_build,
-    mvn_compile,
-    mvn_package,
-    mvn_clean,
-    gradle_test,
+    checkstyle_check,
     gradle_build,
     gradle_check,
+    gradle_test,
+    mvn_build,
+    mvn_clean,
+    mvn_compile,
+    mvn_package,
+    mvn_test,
     spotbugs_check,
-    checkstyle_check,
 )
 
 

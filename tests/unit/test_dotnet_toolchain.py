@@ -1,16 +1,18 @@
 """Tests for C#/.NET toolchain."""
-import pytest
 import subprocess
+
+import pytest
+
 from dhybrid.tools.dotnet_toolchain import (
-    dotnet_test,
     dotnet_build,
-    dotnet_restore,
     dotnet_clean,
+    dotnet_ef_migrations,
     dotnet_fmt,
     dotnet_format,
-    dotnet_tool_install,
     dotnet_outdated,
-    dotnet_ef_migrations,
+    dotnet_restore,
+    dotnet_test,
+    dotnet_tool_install,
 )
 
 
