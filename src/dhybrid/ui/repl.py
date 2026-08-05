@@ -240,6 +240,9 @@ def _recent_user_history(ctx, n: int = 3) -> str:
 
 
 def _run_one(ctx, raw: str) -> None:
+    # Reset buffer streaming output di non-TTY (cegah pecah karakter per baris)
+    from dhybrid.ui.render import flush_stream
+    flush_stream()  # aman di semua mode — no-op jika buffer kosong
     # judul sesi dari prompt pertama
     if ctx.store.get_session(ctx.sid) and not ctx.store.get_session(ctx.sid)["title"].startswith("untitled"):
         pass

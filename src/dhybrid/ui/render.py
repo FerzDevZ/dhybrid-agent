@@ -19,15 +19,52 @@ def style(text: str, code: str = "36") -> str:
     return f"\x1b[{code}m{text}\x1b[0m"
 
 
+class _BufferedStreamPrint:
+    """Buffer delta kecil di non-TTY mode & hanya emit baris penuh.
+
+    Di TTY: output stream langsung (responsif).
+    Di non-TTY (pipe/CI): buffer per-baris — cegah output pecah karakter
+    demi karakter (misal 'H\\nai!\\n👋...' jadi 'Hai! 👋...').
+    """
+
+    def __init__(self) -> None:
+        self._buf = ""
+
+    def __call__(self, text: str) -> None:
+        if is_tty() and not os.environ.get("NO_COLOR"):
+            # TTY: langsung — cursor management & streaming progres
+            sys.stdout.write(text)
+            sys.stdout.flush()
+            return
+        # non-TTY: buffer sampai ada newline lengkap
+        self._buf += text
+        # Emit baris penuh (sampai newline terakhir)
+        lines = self._buf.split("\n")
+        # simpan sisa yang belum lengkap di buffer
+        self._buf = lines[-1]
+        for line in lines[:-1]:
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+    def flush(self) -> None:
+        if self._buf:
+            sys.stdout.write(self._buf)
+            sys.stdout.flush()
+            self._buf = ""
+
+
+# Singleton instance — state buffer persisten tiap delta
+_streamer = _BufferedStreamPrint()
+
+
 def stream_print(text: str) -> None:
     """Stream output model ke terminal.
 
     Di TTY: tulis langsung (stream progres, cursor management).
-    Di non-TTY (pipe/CI): tulis langsung juga — model yang mengatur
-    format outputnya sendiri (strip_tool_block).
+    Di non-TTY (pipe/CI): buffer per-baris agar output tidak pecah
+    karakter demi karakter.
     """
-    sys.stdout.write(text)
-    sys.stdout.flush()
+    _streamer(text)
 
 
 # Tag-tag markup yang perlu dibersihkan dari output streaming
@@ -50,3 +87,8 @@ def _clean_stream(text: str) -> str:
     text = _ARGVALUE_OPEN_RE.sub("", text)
     text = _ARGVALUE_CLOSE_RE.sub("", text)
     return text
+
+
+def flush_stream() -> None:
+    """Flush buffer sisa di non-TTY mode — panggil sebelum DONE/render akhir."""
+    _streamer.flush()
