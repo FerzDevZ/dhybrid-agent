@@ -261,6 +261,10 @@ def _run_one(ctx, raw: str) -> None:
     was_answered = getattr(ctx, "clarify_just_answered", False)
     ctx.clarify_just_answered = False
     clarify_cfg = getattr(ctx.cfg, "clarify", {}) or {}
+    
+    # Guard: max 1 clarify per turn untuk mencegah loop
+    _clarify_done_this_turn = False
+    
     if clarify_cfg.get("enabled", True) and ctx.ask_state.interactive:
         from dhybrid.agent.intent import detect_ambiguity
 
@@ -270,7 +274,7 @@ def _run_one(ctx, raw: str) -> None:
             history=_recent_user_history(ctx),
             last_turn_was_answer=was_answered,
         )
-        if hint:
+        if hint and not _clarify_done_this_turn:
             # Pertanyaan digenerate AI (natural, selalu bervariasi); bila model
             # gagal/offline → fallback ke template pool (tetap bervariasi).
             if clarify_cfg.get("ai", True):
@@ -307,6 +311,7 @@ def _run_one(ctx, raw: str) -> None:
                 ChatMessage(role="user", content=f"[keputusan user] {answer}")
             )
             ctx.clarify_just_answered = True
+            _clarify_done_this_turn = True
             raw = f"{raw}\n[stack dipilih: {answer}]"
 
     max_inject = ctx.cfg.skills.get("max_inject", 3)
@@ -360,7 +365,10 @@ def _run_one(ctx, raw: str) -> None:
         with rich_ui.render_progress("menyelesaikan task"):
             result = run_agent(ctx, prompt)
         # tool ask_user dipanggil agent → tanya user, teruskan jawaban, lanjutkan
-        while result.pending_question:
+        # Guard: max 1 ask_user per turn untuk mencegah loop
+        _ask_done_this_turn = False
+        
+        while result.pending_question and not _ask_done_this_turn:
             pq = result.pending_question
             print(style("\n❓ " + str(pq.get("prompt", "?")), "1;36"))
             opts = pq.get("options") or []
@@ -382,6 +390,7 @@ def _run_one(ctx, raw: str) -> None:
             # tidak dicocokkan skill, tidak memicu nudge build.
             ctx.ctx.push(ChatMessage(role="user", content=f"[jawaban user] {answer}"))
             result = run_agent(ctx, "", push_prompt=False)
+            _ask_done_this_turn = True
     finally:
         ctx.hooks.on_delta = orig_delta
     final = result.final_text
