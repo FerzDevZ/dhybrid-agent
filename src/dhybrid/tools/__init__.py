@@ -48,9 +48,10 @@ def build_tools(
         ts_toolchain,
         vision,
         web,
+        dotnet_toolchain,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, ci_cd, go_toolchain, rust_toolchain, ts_toolchain, java_toolchain, orchestrator, project_memory, soft):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, ci_cd, go_toolchain, rust_toolchain, ts_toolchain, java_toolchain, dotnet_toolchain, orchestrator, project_memory, soft):
         mod.register(reg, max_chars=max_chars)
     browser_tool.register(reg)
     vision.register(reg)
