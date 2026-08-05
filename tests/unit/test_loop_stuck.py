@@ -76,3 +76,52 @@ def test_loop_max_steps_nonbuild_keeps_normal():
     result = _run("apa itu laravel")
     assert result.files_created == 0
     assert result.quality_score < 100
+
+
+class WeakClient(LLMClient):
+    """Model lemah: langsung jawab final 'akan kerjakan' tanpa tool-call apapun.
+
+    Beda dengan ReconClient (selalu tool-call → max_steps habis): client ini
+    menyelesaikan siklus pertama tapi tanpa bukti kerja → loop tidak boleh
+    mengklaim DONE berkualitas.
+    """
+
+    def __init__(self, name="free-weak"):
+        self.name = name
+        self.calls = 0
+
+    def stream(self, messages, **kw):
+        self.calls += 1
+        yield StreamEvent(kind="done", usage=Usage(prompt_tokens=20, completion_tokens=8))
+
+    def complete(self, messages, **kw):
+        from dhybrid.llm.base import ChatMessage, ChatResponse
+
+        return ChatResponse(
+            message=ChatMessage(
+                role="assistant", content="Saya akan cek dan kerjakan sekarang."
+            ),
+            usage=Usage(),
+            model=self.name,
+        )
+
+    def model_name(self):
+        return self.name
+
+
+def test_loop_weak_model_no_toolcalls_no_fake_done():
+    """Anti-junk: janji tanpa eksekusi → skor rendah + stopped_early, bukan 100."""
+    client = WeakClient()
+    loop = AgentLoop(
+        client,
+        _tools(),
+        ContextManager(),
+        TokenBudget(soft=10**9, hard=10**9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(max_steps=2),
+    )
+    result = loop.run("kerjakan proyek login", "system", push_prompt=True)
+    assert client.calls >= 1
+    assert result.files_created == 0
+    assert result.quality_score < 100  # jangan klaim 100/100 tanpa bukti
+    assert result.stopped_early is True
