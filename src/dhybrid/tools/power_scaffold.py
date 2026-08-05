@@ -20,7 +20,7 @@ def _scaffold(template_dir: str, target_dir: str, variables: dict) -> str:
     env = Environment(
         loader=FileSystemLoader(str(tdir)),
         undefined=StrictUndefined,
-        autoescape=False,
+        autoescape=False,  # nosec B701
     )
     created = 0
     tdir_real = tdir.resolve()

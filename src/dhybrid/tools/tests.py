@@ -7,8 +7,8 @@ import subprocess
 
 def run_tests(command: str = "pytest -q", path: str = ".", timeout: int = 120, max_chars: int = 8000) -> str:
     try:
-        # nosec B602 — shell=True BY DESIGN: tool tests menjalankan pytest
-        # dengan command yang datang dari model (hanya arg pytest, bukan shell bebas).
+        # shell=True BY DESIGN: tool tests menjalankan pytest, command dari
+        # model (hanya arg pytest, bukan shell bebas).
         proc = subprocess.run(
             command, shell=True, cwd=path, capture_output=True, text=True, timeout=timeout, check=False  # nosec B602
         )
@@ -25,7 +25,7 @@ def run_tests(command: str = "pytest -q", path: str = ".", timeout: int = 120, m
 def tdd_status(path: str = ".", timeout: int = 120) -> str:
     """RED = ada test gagal, GREEN = semua test lolos, NO_TESTS = tidak ada test."""
     try:
-        # nosec B602 — sama: pytest tetap, command dari model.
+        # shell=True BY DESIGN: pytest tetap, command dari model.
         proc = subprocess.run(
             "pytest -q --no-header", shell=True, cwd=path, capture_output=True, text=True, timeout=timeout, check=False  # nosec B602
         )

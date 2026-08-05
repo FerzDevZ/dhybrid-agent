@@ -73,3 +73,13 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.bandit]
+skips = [
+    "B404",  # import subprocess — by design: agent tool terminal/toolchain
+    "B603",  # subprocess tanpa shell (list-args) — aman; shell=True sengaja + nosec B602
+    "B607",  # partial exe path — toolchain bin/cargo/go dipanggil dari venv/PATH
+    "B110",  # try-except-pass — handler soft-return (sudah diaudit, diberi logging)
+    "B112",  # try-except-continue — skip entri rusak di marketplace (by design)
+    "B101",  # assert — guard menjaga invariant (mcp stdin/stdout)
+]

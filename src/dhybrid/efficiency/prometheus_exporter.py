@@ -83,8 +83,11 @@ def export_metrics() -> str:
     return "\n\n".join(blocks)
 
 
-def start_metrics_server(port: int = 9090, host: str = "0.0.0.0") -> HTTPServer:
+def start_metrics_server(port: int = 9090, host: str = "127.0.0.1") -> HTTPServer:
     """Start HTTP server untuk /metrics endpoint di background thread.
+
+    Host default localhost (127.0.0.1) supaya endpoint /metrics tidak
+    terekspos ke interface lain tanpa diminta. (bandit B104)
 
     Args:
         port: Port untuk bind (0 = random free port)

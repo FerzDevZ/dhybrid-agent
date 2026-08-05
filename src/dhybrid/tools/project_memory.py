@@ -62,7 +62,7 @@ def _vectorize(text: str) -> list[float]:
     vec = [0.0] * _DIM
     for i in range(len(t) - 2):
         g = t[i : i + 3]
-        h = int(hashlib.md5(g.encode("utf-8")).hexdigest(), 16) % _DIM
+        h = int(hashlib.md5(g.encode("utf-8"), usedforsecurity=False).hexdigest(), 16) % _DIM
         vec[h] += 1.0
     norm = math.sqrt(sum(v * v for v in vec)) or 1.0
     return [v / norm for v in vec]
@@ -150,7 +150,7 @@ def mem_search(query: str, k: int = 5) -> str:
             if ids:
                 placeholders = ",".join("?" * len(ids))
                 for row in conn.execute(
-                    f"SELECT id, path, start_line, end_line, text FROM chunks "
+                    f"SELECT id, path, start_line, end_line, text FROM chunks "  # nosec B608
                     f"WHERE id IN ({placeholders})",
                     ids,
                 ).fetchall():

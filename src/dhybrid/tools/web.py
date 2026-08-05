@@ -71,7 +71,7 @@ def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
         return f"ERROR: URL harus http/https: {url}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "dhybrid-agent/0.3"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
             raw = r.read(200_000)  # batas 200KB
             ctype = r.headers.get("Content-Type", "")
             enc = "utf-8"
@@ -232,7 +232,7 @@ def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
                 "Accept": "text/html",
             })
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
                 html = r.read(120_000).decode("utf-8", errors="replace")
         except Exception as e:  # noqa: BLE001
             return f"ERROR search: {type(e).__name__}: {e}"
@@ -274,7 +274,7 @@ def http_request(
     # retry 429/5xx exponential backoff (max 3x)
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
                 status = r.getcode()
                 raw = r.read(200_000)
                 ctype = r.headers.get("Content-Type", "")
