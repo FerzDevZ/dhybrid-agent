@@ -7,7 +7,7 @@ max 3 skill, masing-masing dipotong max_chars.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from dhybrid.skills.marketplace import (
@@ -399,3 +399,105 @@ def search_marketplace_skills(query: str, marketplace_dir: str) -> list[dict[str
         return search_skills(query, marketplace_dir)
     except Exception:
         return []
+
+
+# --- Skill Composition ---
+
+@dataclass
+class SkillComposition:
+    """Represents a composed workflow from multiple skills."""
+    name: str
+    description: str
+    skill_names: list[str]
+    composition_type: str = "sequence"  # "sequence" or "parallel"
+    metadata: dict = field(default_factory=dict)
+    
+    def to_dict(self) -> dict:
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "SkillComposition":
+        return cls(**data)
+
+
+def compose_skills(
+    skills: list[Skill],
+    name: str,
+    description: str = "",
+    composition_type: str = "sequence",
+) -> Skill | None:
+    """Compose multiple skills into a single workflow skill.
+    
+    Args:
+        skills: List of skills to compose
+        name: Name for the composed skill
+        description: Description of the workflow
+        composition_type: "sequence" (default) or "parallel"
+    
+    Returns:
+        Composed Skill object or None if empty
+    """
+    if not skills:
+        return None
+    
+    if len(skills) == 1:
+        # Single skill - return as-is with new name
+        sk = skills[0]
+        return Skill(
+            name=name,
+            description=description or sk.description,
+            body=sk.body,
+            path=sk.path,
+        )
+    
+    # Build composed body
+    body_parts = [
+        f"---\nname: {name}\ndescription: {description}\n---\n",
+        f"# {name}\n\n",
+    ]
+    
+    if description:
+        body_parts.append(f"**Workflow:** {description}\n\n")
+    
+    body_parts.append("**Composed from skills:**\n\n")
+    
+    for i, sk in enumerate(skills, 1):
+        # Extract key info from each skill
+        body_parts.append(f"{i}. **{sk.name}** — {sk.description}\n")
+        # Include a summary of the skill body (first 200 chars)
+        summary = sk.body[:200].strip()
+        if summary:
+            body_parts.append(f"   {summary}\n")
+        body_parts.append("\n")
+    
+    if composition_type == "sequence":
+        body_parts.append("\n**Execution order:** Sequential (1 → 2 → 3...)\n")
+    else:
+        body_parts.append("\n**Execution order:** Parallel (all at once)\n")
+    
+    composed_body = "".join(body_parts)
+    
+    return Skill(
+        name=name,
+        description=description,
+        body=composed_body,
+        path=skills[0].path.parent / name / "SKILL.md",
+    )
+
+
+def compose_skill_sequence(
+    skills: list[Skill],
+    name: str,
+    description: str = "",
+) -> Skill | None:
+    """Compose skills as a sequence (step-by-step workflow).
+    
+    Args:
+        skills: List of skills in execution order
+        name: Name for the composed skill
+        description: Description of the workflow
+    
+    Returns:
+        Composed Skill object or None if empty
+    """
+    return compose_skills(skills, name, description, composition_type="sequence")
