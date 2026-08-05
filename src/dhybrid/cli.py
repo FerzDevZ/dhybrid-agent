@@ -163,12 +163,39 @@ def cmd_self_update(args) -> int:
     return 0
 
 
+def cmd_install(args) -> int:
+    """Run the installer (reinstall/update)."""
+    import subprocess
+    import os
+    
+    install_dir = os.path.expanduser("~/.dhybrid-agent")
+    script_path = os.path.join(install_dir, "install.sh")
+    
+    if not os.path.exists(script_path):
+        print(f"ERROR: install.sh not found at {script_path}")
+        print("Run the one-liner instead:")
+        print("  curl -fsSL https://raw.githubusercontent.com/FerzDevZ/dhybrid-agent/main/install.sh | bash")
+        return 1
+    
+    env = os.environ.copy()
+    if getattr(args, 'use_uv', False):
+        env['DHYBRID_USE_UV'] = '1'
+    if getattr(args, 'branch', None):
+        env['DHYBRID_BRANCH'] = args.branch
+    if getattr(args, 'install_dir', None):
+        env['DHYBRID_INSTALL_DIR'] = args.install_dir
+    
+    result = subprocess.run(["bash", script_path], env=env)
+    return result.returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     load_standard_dotenvs()
     parser = argparse.ArgumentParser(
         prog="dhybrid",
         description="dhybrid-agent — CLI coding agent hemat token (hybrid routing). "
-                    "Tanpa subcommand = langsung masuk sesi interaktif.",
+                    "Tanpa subcommand = langsung masuk sesi interaktif.\n"
+                    "Subcommands: repl, run, tokens, resume, sessions, skills, doctor, self-update, install",
     )
     parser.add_argument("--version", action="version", version=f"dhybrid-agent {__version__}")
     parser.add_argument("--config", default=None, help="path config.yaml (default: config/default.yaml)")
@@ -194,9 +221,13 @@ def main(argv: list[str] | None = None) -> int:
     doc = sub.add_parser("doctor", help="diagnosa config, key, koneksi, update")
     doc.add_argument("--offline", action="store_true", help="tanpa cek network")
     sub.add_parser("self-update", help="perbarui dhybrid-agent dari GitHub")
+    inst = sub.add_parser("install", help="jalankan installer (reinstall/update)")
+    inst.add_argument("--use-uv", action="store_true", help="gunakan uv untuk install lebih cepat")
+    inst.add_argument("--branch", default=None, help="branch git (default: main)")
+    inst.add_argument("--install-dir", default=None, help="direktori instalasi (default: ~/.dhybrid-agent)")
 
     # opsi global boleh ditulis sesudah subcommand juga (tanpa menimpa nilai global)
-    for p in (repl, run, res):
+    for p in (repl, run, res, inst):
         p.add_argument("--model", default=argparse.SUPPRESS)
         p.add_argument("--yes", action="store_true", default=argparse.SUPPRESS)
         p.add_argument("--cwd", default=argparse.SUPPRESS)
@@ -218,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         "skills": cmd_skills,
         "doctor": cmd_doctor,
         "self-update": cmd_self_update,
+        "install": cmd_install,
     }
     return handlers[args.command](args)
 
