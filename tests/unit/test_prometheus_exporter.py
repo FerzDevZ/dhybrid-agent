@@ -17,15 +17,6 @@ def _register_standard_metrics():
     REGISTRY.register(Counter("tokens_total", "total tokens (prompt+completion)"))
 
 
-@pytest.fixture(autouse=True)
-def clear_registry():
-    """Clear registry before and after each test."""
-    REGISTRY._items.clear()
-    _register_standard_metrics()
-    yield
-    REGISTRY._items.clear()
-
-
 def test_prometheus_exporter_basic():
     """Test basic export format."""
     REGISTRY.register(Counter("test_counter", "Test counter")).inc(5)
