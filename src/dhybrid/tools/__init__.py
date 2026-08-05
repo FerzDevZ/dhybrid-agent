@@ -21,6 +21,7 @@ def build_tools(
     from dhybrid.tools import (
         ask,
         browser_tool,
+        ci_cd,
         clarify,
         code_map,
         code_map_multi,
@@ -45,7 +46,7 @@ def build_tools(
         web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, orchestrator, project_memory, soft):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, ci_cd, orchestrator, project_memory, soft):
         mod.register(reg, max_chars=max_chars)
     browser_tool.register(reg)
     vision.register(reg)
