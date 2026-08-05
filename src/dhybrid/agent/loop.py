@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.parsing import strip_tool_block
 from dhybrid.agent.quality import score_output
+from dhybrid.agent.reasoning import ReasoningTrace
 from dhybrid.agent.streaming import ToolBlockFilter
 from dhybrid.agent.text_parser import extract_tool_calls_from_text
 from dhybrid.agent.verify import count_created_files, snapshot_files, verify_build
@@ -167,6 +168,7 @@ class LoopResult:
     escalation_count: int = 0           # berapa kali naik model akibat quality rendah
     critiqued: bool = False             # pernah self-critique
     pending_question: dict | None = None  # tool ask_user: tunggu jawaban user di REPL
+    reasoning_trace: ReasoningTrace = field(default_factory=ReasoningTrace)  # chain-of-thought log
 
 
 class AgentLoop:
@@ -196,6 +198,7 @@ class AgentLoop:
         self.ask_state = ask_state
         self.clarify_state = clarify_state
         self.tool_events: list[dict] = []  # jejak tool (untuk verifier & skor)
+        self.reasoning_trace = ReasoningTrace()  # chain-of-thought logging
         self._client_factory = client_factory
         self._esc_idx = 0  # posisi di escalation_chain (0 = model awal)
         self._n_escalations = 0  # berapa kali udah naik model akibat quality rendah
@@ -433,6 +436,8 @@ class AgentLoop:
         before_files = snapshot_files(self.cwd)
         last_snapshot = before_files
         self.tool_events = []
+        self.reasoning_trace.clear()  # reset reasoning trace for new run
+        self.reasoning_trace.add_step("start", f"Starting task: {user_prompt[:100]}", [])
         # hitungan tool per-RUN: auto-skill & verifier hanya melihat run ini,
         # bukan akumulasi sesi (cegah kontaminasi antar-prompt di REPL)
         self.tools.reset_counts()
@@ -623,19 +628,22 @@ class AgentLoop:
                     ChatMessage(role="assistant", content=resp.message.content)
                 )
                 for tc in resp.message.tool_calls:
-                    output = self.tools.execute(tc["name"], tc.get("arguments", {}))
+                    tool_name = tc["name"]
+                    self.reasoning_trace.add_step("execute", f"Running {tool_name}", [tool_name])
+                    output = self.tools.execute(tool_name, tc.get("arguments", {}))
                     if output.startswith("ERROR"):
                         errors += 1
                     output = output[: self.cfg.max_tool_output_chars]
-                    self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
-                    self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
-                    self._extract_facts(tc["name"], tc.get("arguments", {}), output)
+                    self.tool_events.append({"name": tool_name, "args": tc.get("arguments", {}), "output": output})
+                    self.hooks.tool(tool_name, tc.get("arguments", {}), output)
+                    self._extract_facts(tool_name, tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(
                             role="user",
-                            content=f"[Hasil tool '{tc['name']}']\n{output}",
+                            content=f"[Hasil tool '{tool_name}']\n{output}",
                         )
                     )
+                    self.reasoning_trace.add_step("observe", f"Tool {tool_name} completed", [tool_name])
                     # ask_user → pause LANGSUNG (tanpa model call tambahan)
                     if self._maybe_pause_for_user(result, last_text):
                         return result
@@ -645,16 +653,19 @@ class AgentLoop:
                     ChatMessage(role="assistant", content="", tool_calls=resp.message.tool_calls)
                 )
                 for tc in resp.message.tool_calls:
-                    output = self.tools.execute(tc["name"], tc.get("arguments", {}))
+                    tool_name = tc["name"]
+                    self.reasoning_trace.add_step("execute", f"Running {tool_name}", [tool_name])
+                    output = self.tools.execute(tool_name, tc.get("arguments", {}))
                     if output.startswith("ERROR"):
                         errors += 1
                     output = output[: self.cfg.max_tool_output_chars]
-                    self.tool_events.append({"name": tc["name"], "args": tc.get("arguments", {}), "output": output})
-                    self.hooks.tool(tc["name"], tc.get("arguments", {}), output)
-                    self._extract_facts(tc["name"], tc.get("arguments", {}), output)
+                    self.tool_events.append({"name": tool_name, "args": tc.get("arguments", {}), "output": output})
+                    self.hooks.tool(tool_name, tc.get("arguments", {}), output)
+                    self._extract_facts(tool_name, tc.get("arguments", {}), output)
                     self.ctx.push(
                         ChatMessage(role="tool", content=output, tool_call_id=tc["id"])
                     )
+                    self.reasoning_trace.add_step("observe", f"Tool {tool_name} completed", [tool_name])
                     # ask_user → pause LANGSUNG (tanpa model call tambahan)
                     if self._maybe_pause_for_user(result, last_text):
                         return result
