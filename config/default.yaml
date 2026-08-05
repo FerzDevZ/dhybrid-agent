@@ -2,15 +2,14 @@ workspace: ~/.dhybrid
 
 model:
   # SATU model — dipilih user kapan saja: /settings atau dhybrid --model <preset>.
-  # TANPA model backup/chain. Default = Gemini (gemini-flash-latest, key dari .env).
-  # Jalan TANPA tool calling kalau key kosong. Pilih preset lain di /settings bila perlu.
+  # Default: OpenCode Zen (gratis, tanpa API key butuh) via laguna-s-2.1-free
   provider: openai
-  model: gemini-flash-latest
-  base_url: https://generativelanguage.googleapis.com/v1beta/openai
-  api_key_env: GEMINI_API_KEY
+  model: laguna-s-2.1-free
+  base_url: https://opencode.ai/zen/v1
+  api_key_env: OPENCODE_ZEN_API_KEY
   max_tokens: 4096
   temperature: 0.2
-  chain: ["opencode-zen-big", "openrouter-big", "anthropic-big"]  # escalation quality chain
+  chain: ["bynara-big", "openrouter-big", "anthropic-big"]  # escalation quality chain
 
 budget:
   soft: 60000              # trigger compaction
