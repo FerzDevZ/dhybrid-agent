@@ -1,7 +1,7 @@
 """Tests for enhanced configuration system."""
-import pytest
 import tempfile
 from pathlib import Path
+
 from dhybrid.config import Config, load_config, save_config
 
 
@@ -173,6 +173,6 @@ def test_config_validation():
             cfg = load_config(config_path)
             # If it loads, should have defaults filled
             assert cfg.workspace is not None
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 — error validasi juga diterima
             # Validation error is also acceptable
             pass

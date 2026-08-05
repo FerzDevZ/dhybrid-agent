@@ -1,5 +1,4 @@
 """Tests for Prometheus metrics exporter."""
-import pytest
 
 from dhybrid.efficiency.metrics import REGISTRY, Counter, Histogram
 from dhybrid.efficiency.prometheus_exporter import export_metrics, start_metrics_server

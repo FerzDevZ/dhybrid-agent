@@ -15,6 +15,7 @@ def _run_mvn_cmd(workspace: str, args: list[str], timeout: int = 300) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -24,7 +25,7 @@ def _run_mvn_cmd(workspace: str, args: list[str], timeout: int = 300) -> str:
         return f"ERROR: maven command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'mvn' command not found. Install Maven from https://maven.apache.org/"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 
@@ -37,6 +38,7 @@ def _run_gradle_cmd(workspace: str, args: list[str], timeout: int = 300) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -46,7 +48,7 @@ def _run_gradle_cmd(workspace: str, args: list[str], timeout: int = 300) -> str:
         return f"ERROR: gradle command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'gradle' command not found. Install Gradle from https://gradle.org/"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 

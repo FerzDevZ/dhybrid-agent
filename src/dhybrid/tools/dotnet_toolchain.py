@@ -15,6 +15,7 @@ def _run_dotnet_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -24,7 +25,7 @@ def _run_dotnet_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
         return f"ERROR: dotnet command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'dotnet' command not found. Install .NET SDK from https://dotnet.microsoft.com/download"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 

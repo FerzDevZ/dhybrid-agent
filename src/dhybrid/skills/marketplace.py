@@ -83,7 +83,7 @@ def export_skill(skills_dir: str, skill_name: str, output_path: str) -> bool:
         output_file.write_text(json.dumps(package.to_dict(), indent=2, ensure_ascii=False))
         
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -129,7 +129,7 @@ description: {package.description}
         skill_file.write_text(content, encoding="utf-8")
         
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -173,7 +173,7 @@ def list_published_skills(skills_dir: str) -> list[dict[str, str]]:
                 "name": name,
                 "description": description,
             })
-        except Exception:
+        except Exception:  # noqa: BLE001, S112
             continue
     
     return skills

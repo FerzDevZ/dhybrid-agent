@@ -7,7 +7,7 @@ max 3 skill, masing-masing dipotong max_chars.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from dhybrid.skills.marketplace import (
@@ -341,7 +341,7 @@ def publish_skill(
     try:
         export_path = Path(marketplace_dir) / f"{skill_name}.json"
         return export_skill(skills_dir, skill_name, str(export_path))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -367,7 +367,7 @@ def install_skill(
         if not package_path.exists():
             return False
         return import_skill(skills_dir, str(package_path), overwrite=overwrite)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -382,7 +382,7 @@ def list_marketplace_skills(marketplace_dir: str) -> list[dict[str, str]]:
     """
     try:
         return list_published_skills(marketplace_dir)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -398,7 +398,7 @@ def search_marketplace_skills(query: str, marketplace_dir: str) -> list[dict[str
     """
     try:
         return search_skills(query, marketplace_dir)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return []
 
 
@@ -417,7 +417,7 @@ class SkillComposition:
         return asdict(self)
     
     @classmethod
-    def from_dict(cls, data: dict) -> "SkillComposition":
+    def from_dict(cls, data: dict) -> SkillComposition:
         return cls(**data)
 
 

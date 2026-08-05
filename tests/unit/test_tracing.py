@@ -40,9 +40,8 @@ def test_nested_spans():
     """Test nested span creation."""
     tracer = init_tracing(service_name="test-service")
     
-    with tracer.start_span("parent") as parent:
-        with tracer.start_span("child", parent=parent) as child:
-            assert child.parent is parent
+    with tracer.start_span("parent") as parent, tracer.start_span("child", parent=parent) as child:
+        assert child.parent is parent
 
 
 def test_span_events():

@@ -165,8 +165,8 @@ def cmd_self_update(args) -> int:
 
 def cmd_install(args) -> int:
     """Run the installer (reinstall/update)."""
-    import subprocess
     import os
+    import subprocess
     
     install_dir = os.path.expanduser("~/.dhybrid-agent")
     script_path = os.path.join(install_dir, "install.sh")
@@ -185,7 +185,7 @@ def cmd_install(args) -> int:
     if getattr(args, 'install_dir', None):
         env['DHYBRID_INSTALL_DIR'] = args.install_dir
     
-    result = subprocess.run(["bash", script_path], env=env)
+    result = subprocess.run(["bash", script_path], env=env, check=False)
     return result.returncode
 
 

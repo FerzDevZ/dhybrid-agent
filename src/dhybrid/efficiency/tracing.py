@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Self
 
 try:
     from opentelemetry import trace
@@ -73,7 +73,7 @@ class Span:
         self.status = status
         self.status_message = message
 
-    def __enter__(self) -> Span:
+    def __enter__(self) -> Self:
         token = _current_span.set(self)
         self._token = token
         return self

@@ -15,6 +15,7 @@ def _run_npm_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -24,7 +25,7 @@ def _run_npm_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
         return f"ERROR: npm command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'npm' command not found. Install Node.js from https://nodejs.org/"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 
@@ -37,6 +38,7 @@ def _run_npx_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -46,7 +48,7 @@ def _run_npx_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
         return f"ERROR: npx command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'npx' command not found. Install Node.js from https://nodejs.org/"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 

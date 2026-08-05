@@ -1,12 +1,12 @@
 """Integration tests for end-to-end workflow testing."""
+
 import pytest
-import tempfile
-from pathlib import Path
-from dhybrid.session.context import SessionContext
+
 from dhybrid.config import Config
+from dhybrid.session.context import SessionContext
 from dhybrid.session.store import SessionStore
-from dhybrid.tools.registry import ToolRegistry
 from dhybrid.tools import build_tools
+from dhybrid.tools.registry import ToolRegistry
 
 
 class TestIntegration:
@@ -112,7 +112,7 @@ class TestIntegration:
     
     def test_skill_injection_workflow(self, tmp_path):
         """Test skill selection and injection pipeline."""
-        from dhybrid.skills.loader import list_skills, select_skills, inject_skills
+        from dhybrid.skills.loader import inject_skills, list_skills, select_skills
         
         # Create a test skill
         skill_dir = tmp_path / "skills" / "test-skill"
@@ -170,7 +170,9 @@ This is a test skill body.
     def test_episodic_memory_integration(self, tmp_path):
         """Test episodic memory integration."""
         try:
-            from dhybrid.session.episodic_memory import EpisodicMemory
+            from dhybrid.session.episodic_memory import (  # noqa: F401 — probe ketersediaan deps
+                EpisodicMemory,
+            )
             
             cfg = Config.load()
             cfg.workspace = tmp_path / ".dhybrid"
@@ -182,14 +184,14 @@ This is a test skill body.
             )
             
             # Test episodic memory functions
-            ctx.memory  # Access to ensure it works
+            _ = ctx.memory  # akses untuk memastikan tidak error
             
         except ImportError:
             pytest.skip("Episodic memory dependencies not available")
     
     def test_config_persistence(self, tmp_path):
         """Test configuration persistence."""
-        from dhybrid.config import save_config, load_config
+        from dhybrid.config import load_config, save_config
         
         cfg = Config.load()
         cfg.workspace = tmp_path / ".dhybrid"
@@ -206,7 +208,11 @@ This is a test skill body.
     
     def test_marketplace_skill_flow(self, tmp_path):
         """Test full marketplace skill flow: export → import."""
-        from dhybrid.skills.marketplace import export_skill, import_skill, list_published_skills
+        from dhybrid.skills.marketplace import (
+            export_skill,
+            import_skill,
+            list_published_skills,
+        )
         
         # Create source skill
         skills_dir = tmp_path / "skills"
@@ -241,7 +247,7 @@ This skill will be exported and imported.
     
     def test_skill_composition_workflow(self, tmp_path):
         """Test composing skills into workflows."""
-        from dhybrid.skills.loader import Skill, compose_skills, compose_skill_sequence
+        from dhybrid.skills.loader import Skill, compose_skills
         
         skill1 = Skill(
             name="setup",

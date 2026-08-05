@@ -1,11 +1,11 @@
 """Tests for skill composition (combine skills for complex workflows)."""
-import pytest
 from pathlib import Path
+
 from dhybrid.skills.loader import (
     Skill,
-    compose_skills,
-    compose_skill_sequence,
     SkillComposition,
+    compose_skill_sequence,
+    compose_skills,
 )
 
 

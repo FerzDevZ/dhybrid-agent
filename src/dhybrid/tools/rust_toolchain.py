@@ -15,6 +15,7 @@ def _run_cargo_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -24,7 +25,7 @@ def _run_cargo_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
         return f"ERROR: cargo command timed out after {timeout}s"
     except FileNotFoundError:
         return "ERROR: 'cargo' command not found. Install Rust toolchain from https://rustup.rs/"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 
@@ -37,6 +38,7 @@ def _run_tool_cmd(workspace: str, tool: str, args: list[str], timeout: int = 120
             capture_output=True,
             text=True,
             timeout=timeout,
+            check=False,
         )
         output = result.stdout + result.stderr
         if result.returncode != 0 and output.strip():
@@ -46,7 +48,7 @@ def _run_tool_cmd(workspace: str, tool: str, args: list[str], timeout: int = 120
         return f"ERROR: {tool} timed out after {timeout}s"
     except FileNotFoundError:
         return f"ERROR: '{tool}' not installed. Install with: cargo install cargo-audit"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return f"ERROR: {type(e).__name__}: {e}"
 
 

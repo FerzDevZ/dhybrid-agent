@@ -1,12 +1,9 @@
 """Tests for auto-skill improvement from user feedback."""
-import pytest
-import tempfile
-from pathlib import Path
+from dhybrid.skills.loader import Skill
 from dhybrid.ui.repl import (
     _auto_learn_skill,
     _should_update_skill,
 )
-from dhybrid.skills.loader import Skill
 
 
 def test_should_update_skill_when_new_richer():
@@ -26,12 +23,10 @@ def test_should_not_update_when_old_richer():
 def test_auto_learn_skill_creates_new(tmp_path, monkeypatch):
     """Test auto-learning a new skill from successful session."""
     # Setup context
-    from dhybrid.session.context import SessionContext
     from dhybrid.config import Config
+    from dhybrid.session.context import SessionContext
     from dhybrid.session.store import SessionStore
     from dhybrid.tools.registry import ToolRegistry
-    from dhybrid.efficiency.budget import TokenBudget
-    from dhybrid.efficiency.context import ContextManager
     
     # Create a config with workspace pointing to tmp_path
     cfg = Config.load()
@@ -51,7 +46,6 @@ def test_auto_learn_skill_creates_new(tmp_path, monkeypatch):
         tests_passed = True
         final_text = "Task completed successfully"
     
-    from dhybrid.ui.repl import _auto_learn_skill
     _auto_learn_skill(ctx, "buat login", "done", StubResult())
     
     # Check skill was created in the configured workspace
@@ -64,11 +58,10 @@ def test_auto_learn_skill_creates_new(tmp_path, monkeypatch):
 
 def test_auto_skill_updates_when_richer(tmp_path, monkeypatch):
     """Test auto-skill updates existing skill when new version is richer."""
-    from dhybrid.session.context import SessionContext
     from dhybrid.config import Config
+    from dhybrid.session.context import SessionContext
     from dhybrid.session.store import SessionStore
     from dhybrid.tools.registry import ToolRegistry
-    from dhybrid.skills.loader import Skill
     
     # Create a config with workspace pointing to tmp_path
     cfg = Config.load()
@@ -129,11 +122,10 @@ description: buat login — skill otomatis dari sesi nyata
 
 def test_never_overwrite_manual_skill(tmp_path, monkeypatch):
     """Test that manual skills are never overwritten."""
-    from dhybrid.session.context import SessionContext
     from dhybrid.config import Config
+    from dhybrid.session.context import SessionContext
     from dhybrid.session.store import SessionStore
     from dhybrid.tools.registry import ToolRegistry
-    from dhybrid.skills.loader import Skill
     
     # Create a config with workspace pointing to tmp_path
     cfg = Config.load()
