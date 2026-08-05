@@ -23,6 +23,7 @@ def build_tools(
         browser_tool,
         clarify,
         code_map,
+        code_map_multi,
         documents,
         files,
         git,
@@ -40,7 +41,7 @@ def build_tools(
         web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, project_memory, soft):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, project_memory, soft):
         mod.register(reg, max_chars=max_chars)
     browser_tool.register(reg)
     vision.register(reg)
