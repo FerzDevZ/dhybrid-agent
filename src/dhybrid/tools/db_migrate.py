@@ -19,7 +19,7 @@ class Migration:
 
     def __post_init__(self):
         if not self.timestamp:
-            self.timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+            self.timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S%f")
         if not self.revision:
             self.revision = self.timestamp[:12]
 
@@ -37,7 +37,16 @@ class MigrationManager:
         up_sql: str,
         down_sql: str = "",
     ) -> Migration:
-        """Create a new migration file."""
+        """Create a new migration file.
+
+        Idempotent untuk konten sama: jika migrasi dengan nama DAN up_sql yang
+        sama sudah ada, tidak menulis file baru (kembalikan Migration yang ada).
+        BUG-04: sebelumnya selalu menulis → 60 file duplikat `create_users_table`.
+        """
+        existing = self._find_existing(name, up_sql)
+        if existing is not None:
+            return existing
+
         migration = Migration(name=name, up_sql=up_sql, down_sql=down_sql)
         
         filename = f"{migration.timestamp}_{migration.name}.py"
@@ -47,6 +56,29 @@ class MigrationManager:
         filepath.write_text(content)
         
         return migration
+
+    def _find_existing(self, name: str, up_sql: str) -> Migration | None:
+        """Cari migrasi dengan nama & up_sql yang sama (skip tulis ulang)."""
+        needle = f"up_sql = \"\"\"\n{up_sql}\n\"\"\""
+        for file in sorted(self.migrations_dir.glob("*.py")):
+            if file.name.startswith("__"):
+                continue
+            try:
+                text = file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if name in text and needle in text:
+                content = text.split("\n")
+                revision = content[2].replace("Revision: ", "") if len(content) > 2 else ""
+                timestamp = content[3].replace("Created: ", "") if len(content) > 3 else ""
+                return Migration(
+                    name=name,
+                    up_sql=up_sql,
+                    down_sql="",
+                    timestamp=timestamp,
+                    revision=revision,
+                )
+        return None
 
     def _generate_migration_file(self, migration: Migration) -> str:
         """Generate Python migration file content."""
