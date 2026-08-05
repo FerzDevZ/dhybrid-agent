@@ -10,6 +10,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from dhybrid.skills.marketplace import (
+    export_skill,
+    import_skill,
+    list_published_skills,
+)
+
 STOPWORDS = {
     "yang", "dan", "di", "ke", "dari", "untuk", "dengan", "pada", "ini", "itu",
     "saya", "anda", "kamu", "tolong", "bantu", "mohon", "please", "the", "and",
@@ -310,3 +316,86 @@ def inject_skills(
     if not parts:
         return prompt
     return "\n\n".join(parts) + "\n\n---\n\n" + prompt
+
+
+# --- Skill Marketplace Integration ---
+
+def publish_skill(
+    skills_dir: str,
+    skill_name: str,
+    marketplace_dir: str,
+    version: str = "1.0.0",
+) -> bool:
+    """Publish a local skill to a marketplace directory.
+    
+    Args:
+        skills_dir: Local skills directory
+        skill_name: Name of skill to publish
+        marketplace_dir: Target marketplace directory
+        version: Version string for the published skill
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        export_path = Path(marketplace_dir) / f"{skill_name}.json"
+        return export_skill(skills_dir, skill_name, str(export_path))
+    except Exception:
+        return False
+
+
+def install_skill(
+    skills_dir: str,
+    marketplace_dir: str,
+    skill_name: str,
+    overwrite: bool = False,
+) -> bool:
+    """Install a skill from marketplace to local skills directory.
+    
+    Args:
+        skills_dir: Local skills directory
+        marketplace_dir: Marketplace directory
+        skill_name: Name of skill to install
+        overwrite: Whether to overwrite existing skill
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        package_path = Path(marketplace_dir) / f"{skill_name}.json"
+        if not package_path.exists():
+            return False
+        return import_skill(skills_dir, str(package_path), overwrite=overwrite)
+    except Exception:
+        return False
+
+
+def list_marketplace_skills(marketplace_dir: str) -> list[dict[str, str]]:
+    """List all available skills in a marketplace directory.
+    
+    Args:
+        marketplace_dir: Marketplace directory path
+    
+    Returns:
+        List of skill metadata dicts
+    """
+    try:
+        return list_published_skills(marketplace_dir)
+    except Exception:
+        return []
+
+
+def search_marketplace_skills(query: str, marketplace_dir: str) -> list[dict[str, str]]:
+    """Search marketplace skills by query.
+    
+    Args:
+        query: Search query
+        marketplace_dir: Marketplace directory
+    
+    Returns:
+        List of matching skill metadata
+    """
+    try:
+        return search_skills(query, marketplace_dir)
+    except Exception:
+        return []
