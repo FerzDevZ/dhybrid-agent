@@ -38,8 +38,8 @@ dhybrid repl
 # Run single task
 dhybrid run "buat login page dengan test"
 
-# Check configuration
-dhybrid config show
+# Check health & config
+dhybrid doctor
 ```
 
 ## Architecture
@@ -406,18 +406,20 @@ WantedBy=multi-user.target
 
 ### Custom Models
 ```bash
-# Add custom model preset
-dhybrid config preset add my-model \
-  --provider openai \
-  --model gpt-4o \
-  --base-url https://api.openai.com/v1 \
-  --api-key-env OPENAI_API_KEY
+# Pilih preset saat menjalankan (tanpa perlu config)
+dhybrid --model anthropic-big repl
+dhybrid --model gemini-fast repl
+dhybrid --list-presets            # lihat semua preset
+
+# Atau set model dari dalam REPL
+#   /model <nama>   → ganti model utama
+#   /settings       → pilih/input provider manual
 ```
 
 ### Disable Features
 ```bash
-# Disable auto-skill learning
-dhybrid config set skills.auto_learn false
+# Disable auto-skill learning (via env var, atau skills.auto_learn=false di config)
+DHYBRID_NO_SKILL=1
 
 # Disable telemetry
 DHYBRID_NO_TELEMETRY=1
@@ -440,24 +442,22 @@ DHYBRID_DEBUG=1 dhybrid repl
 ```bash
 # Check API key
 echo $OPENAI_API_KEY
-# Or set via config
-dhybrid config set model.api_key_env MY_CUSTOM_KEY
+# Set via /key saat REPL, atau env var; atau ganti provider: /model <nama>
 ```
 
 **Tools not available**
 ```bash
-# Check allowlist
-dhybrid config show tool.allowlist
-# Add missing tools
-dhybrid config set tool.allowlist "[terminal, write_file, custom_tool]"
+# Cek kesehatan & allowlist
+dhybrid doctor
+# Tambah tool ke tool.allowlist di config/default.yaml
+# (regenerasi allowlist otomatis saat restart; pastikan tool terdaftar di registry)
 ```
 
 **Memory not persisting**
 ```bash
-# Check workspace
-dhybrid config show workspace
-# Ensure same project directory
+# Pastikan memakai direktori proyek yang sama
 cd /your/project && dhybrid repl
+# Data tersimpan di workspace .dhybrid/ proyek tsb (memory.sqlite, sessions.sqlite)
 ```
 
 **Episodic memory failing**

@@ -440,6 +440,40 @@ Bandingkan dua laporan di `docs/benchmark-*.md` untuk melihat % penghematan nyat
 <br/>
 
 <!-- ═══════════════════════════════════════════════════════════════
+     DOCUMENTATION LIBRARY — navigasi per peran
+     ═══════════════════════════════════════════════════════════════ -->
+
+<div align="center">
+<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">D O C U M E N T A S I</h2>
+</div>
+
+<br/>
+
+> 📚 **[Masuk Perpustakaan →](docs/README.md)** — pilih jalur: pemula, pengguna, pengembang.
+
+| 📌 Tujuan | 📄 Baca |
+|-----------|---------|
+| 🌱 **Baru mulai (langkah demi langkah)** | **[`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)** |
+| Instal & update | [Instalasi](#install) |
+| Langsung pakai | [Quickstart](#quickstart) |
+| Semua perintah (CLI + slash) | [`docs/QUICK_REFERENCE.md`](docs/QUICK_REFERENCE.md) |
+| Panduan lengkap end-to-end | [`docs/COMPLETE_GUIDE.md`](docs/COMPLETE_GUIDE.md) |
+| Konfigurasi lanjutan | [`docs/ADVANCED_USAGE.md`](docs/ADVANCED_USAGE.md) |
+| Arsitektur sistem | [`docs/architecture.md`](docs/architecture.md) |
+| 12 teknik hemat token | [`docs/token-efficiency.md`](docs/token-efficiency.md) |
+| Dev mendalam per modul | [`docs/TECHNICAL_DOCS.md`](docs/TECHNICAL_DOCS.md) |
+| Multi-bahasa kode | [`docs/MULTI_LANGUAGE_GUIDE.md`](docs/MULTI_LANGUAGE_GUIDE.md) |
+| Hasil audit bug & perbaikan | [`docs/BUGS_AUDIT.md`](docs/BUGS_AUDIT.md) |
+| Roadmap & perencanaan | [`docs/roadmap.md`](docs/roadmap.md) |
+| Riwayat rilis | [`CHANGELOG.md`](CHANGELOG.md) |
+
+<br/>
+
+---
+
+<br/>
+
+<!-- ═══════════════════════════════════════════════════════════════
      GITHUB STATS
      ═══════════════════════════════════════════════════════════════ -->
 

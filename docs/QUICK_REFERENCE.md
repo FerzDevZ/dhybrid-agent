@@ -4,13 +4,18 @@
 
 | Command | Description |
 |---------|-------------|
-| `dhybrid repl` | Start interactive REPL |
+| `dhybrid repl` | Start interactive REPL (default tanpa subcommand) |
 | `dhybrid run "task"` | Run single task |
-| `dhybrid config show` | Show current config |
-| `dhybrid config set key value` | Set config value |
-| `dhybrid config preset add name` | Add model preset |
+| `dhybrid tokens` | Token & cost dashboard |
+| `dhybrid resume <session_id>` | Lanjutkan sesi lama |
+| `dhybrid sessions` | Daftar sesi |
+| `dhybrid skills` | Daftar skill |
 | `dhybrid self-update` | Update to latest version |
-| `dhybrid doctor` | Health check |
+| `dhybrid install` | Reinstall/update via installer |
+| `dhybrid doctor` | Health check (config, key, koneksi, allowlist) |
+| `dhybrid --model <preset>` | Set model utama dari preset |
+| `dhybrid --cwd <dir>` | Kerjakan di direktori lain |
+| `dhybrid --list-presets` | Cetak semua preset model |
 
 ## REPL Shortcuts
 
@@ -107,20 +112,20 @@ semantic_search        # Vector code search
 
 ## Configuration Quick Access
 
+Konfigurasi ada di `config/default.yaml` (atau `--config <path>`). Tidak ada
+subcommand `dhybrid config` di versi ini — ubah via: file YAML, env var, atau
+slash `/model`, `/key`, `/settings` saat REPL.
+
 ```bash
-# Show all config
-dhybrid config show
+# Pilih model dari preset saat menjalankan
+dhybrid --model anthropic-big repl
+dhybrid --model gemini-fast repl
 
-# Get nested value
-dhybrid config get model.provider
+# Lihat preset yang tersedia
+dhybrid --list-presets
 
-# Set value
-dhybrid config set model.temperature 0.5
-dhybrid config set skills.auto_learn false
-
-# Manage presets
-dhybrid config preset list
-dhybrid config preset add my-model --provider openai --model gpt-4o
+# Path config custom
+dhybrid --config ./produksi.yaml repl
 ```
 
 ## Environment Variables
@@ -215,14 +220,16 @@ dhybrid run "generate FastAPI dari openapi.yaml"
 ```bash
 # Add to ~/.bashrc or ~/.zshrc
 alias dr='dhybrid repl'
-alias drun='dhybrid run'
-alias dc='dhybrid config'
-alias dcu='dhybrid self-update'
+alias drun='dhybrid --cwd . run'   # alias run di folder saat ini
+alias ddoc='dhybrid doctor'        # cek kesehatan
+alias dsk='dhybrid skills'         # daftar skill
+alias dre='dhybrid resume'         # lanjutkan sesi
 ```
 
 ## Links
 
 - **Full Docs**: `docs/COMPLETE_GUIDE.md`
+- **Getting Started**: `docs/GETTING_STARTED.md`
 - **Advanced Usage**: `docs/ADVANCED_USAGE.md`
 - **Multi-Language Guide**: `docs/MULTI_LANGUAGE_GUIDE.md`
-- **Deployment Guide**: `docs/DEPLOYMENT_GUIDE.md`
+- **Perpustakaan (lobi)**: `docs/README.md`
