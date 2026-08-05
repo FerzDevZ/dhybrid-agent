@@ -10,12 +10,13 @@
 #   DHYBRID_INSTALL_DIR direktori instalasi (default: ~/.dhybrid-agent)
 #   DHYBRID_BIN_DIR     direktori symlink binary (default: ~/.local/bin)
 #   DHYBRID_SKIP_ENV    1 = jangan buat .env dari .env.example
+#   DHYBRID_USE_UV      1 = gunakan uv untuk instalasi (lebih cepat)
 #
 # Aman dipakai via pipe (non-interaktif, tidak ada prompt).
 
 set -euo pipefail
 
-# ---- fix: cwd broken (stale PWD di shell lama / direktori dihapus/dipindah)
+# ---- fix: cwd broken (stale PWD di shell lama / direktori dihapus/dipindah) ----
 # bikin semua operasi error "No such file or directory" — termasuk pip install
 # di dalam venv yang diciptakan di cwd broken. Deteksi via subshell sebelum cd:
 #   - `pwd -P` tak bisa resolve → broken
@@ -31,6 +32,7 @@ REPO_URL="${DHYBRID_REPO_URL:-https://github.com/FerzDevZ/dhybrid-agent.git}"
 BRANCH="${DHYBRID_BRANCH:-main}"
 INSTALL_DIR="${DHYBRID_INSTALL_DIR:-$HOME/.dhybrid-agent}"
 BIN_DIR="${DHYBRID_BIN_DIR:-$HOME/.local/bin}"
+USE_UV="${DHYBRID_USE_UV:-0}"
 
 # ---- warna (aman non-tty) ----
 if [ -t 1 ]; then
@@ -44,14 +46,25 @@ warn() { printf '%s\n' "${C_YELLOW}    $*${C_OFF}"; }
 die()  { printf '%s\n' "${C_RED}ERROR: $*${C_OFF}" >&2; exit 1; }
 
 # ---- prasyarat ----
-command -v git >/dev/null 2>&1 || die "butuh 'git' (sudo apt install git)"
+command -v git >/dev/null 2>&1 || die "butuh 'git' (sudo apt install git / brew install git)"
 command -v python3 >/dev/null 2>&1 || die "butuh 'python3'"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' \
   || die "butuh Python >= 3.12 (punya: $(python3 --version 2>&1))"
 
+# ---- optional: uv untuk install lebih cepat ----
+if [ "$USE_UV" = "1" ]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    info "uv tidak ditemukan — install uv dulu: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    info "Lanjut dengan pip standar..."
+    USE_UV=0
+  fi
+fi
+
 say "Memasang dhybrid-agent (hemat token, hybrid routing)"
 info "repo     : $REPO_URL"
+info "branch   : $BRANCH"
 info "instal di: $INSTALL_DIR"
+[ "$USE_UV" = "1" ] && info "mode     : uv (cepat)"
 
 # ---- clone / update ----
 if [ -d "$INSTALL_DIR/.git" ]; then
@@ -69,8 +82,15 @@ fi
 # ---- venv + dependensi ----
 say "Menyiapkan venv & dependensi (sekali saja, ~30 detik)..."
 python3 -m venv "$INSTALL_DIR/.venv"
-"$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
-"$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR"
+
+if [ "$USE_UV" = "1" ]; then
+  say "Menggunakan uv untuk install dependensi (lebih cepat)..."
+  "$INSTALL_DIR/.venv/bin/uv" pip install --quiet --upgrade pip
+  "$INSTALL_DIR/.venv/bin/uv" pip install --quiet -e "$INSTALL_DIR[dev]"
+else
+  "$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
+  "$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR[dev]"
+fi
 
 # ---- binary di PATH ----
 mkdir -p "$BIN_DIR"
@@ -86,7 +106,7 @@ fi
 # ---- auto-check tools untuk suggerensi stack default ----
 say "Mengecek tools development..."
 AVAILABLE_TOOLS=""
-for cmd in php composer node npm python3 pip3; do
+for cmd in php composer node npm python3 pip3 go cargo dotnet java mvn gradle; do
     if command -v "$cmd" >/dev/null 2>&1; then
         AVAILABLE_TOOLS="$AVAILABLE_TOOLS $cmd"
     fi
@@ -94,31 +114,29 @@ done
 if [ -n "$AVAILABLE_TOOLS" ]; then
     info "Tools tersedia:$AVAILABLE_TOOLS"
 else
-    warn "Tidak ada development tools terdeteksi (php, node, python, dll.)"
+    warn "Tidak ada development tools terdeteksi"
     info "Anda tetap bisa pakai dhybrid — tapi untuk coding butuh tools."
 fi
 
-# ---- PATH permanen (~/.bashrc) ----
-if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-  if ! grep -q "dhybrid-agent PATH" "$HOME/.bashrc" 2>/dev/null; then
-    printf '\n# dhybrid-agent PATH\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$HOME/.bashrc"
-    info "PATH ditambahkan ke ~/.bashrc"
+# ---- PATH permanen (~/.bashrc / ~/.zshrc) ----
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  if [ -f "$rc" ] && [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+    if ! grep -q "dhybrid-agent PATH" "$rc" 2>/dev/null; then
+      printf '\n# dhybrid-agent PATH\nexport PATH="%s:$PATH"\n' "$BIN_DIR" >> "$rc"
+      info "PATH ditambahkan ke $rc"
+    fi
   fi
-fi
+done
 
 # ---- shell completion ----
-case "${SHELL##*/}" in
-  bash)
-    if ! grep -q "dhybrid-completion" "$HOME/.bashrc" 2>/dev/null; then
-      printf '\n# dhybrid-completion\nsource %s/scripts/completions.bash\n' "$INSTALL_DIR" >> "$HOME/.bashrc"
-      info "completion bash ditambahkan ke ~/.bashrc"
-    fi ;;
-  zsh)
-    if ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev/null; then
-      printf '\n# dhybrid-completion\nautoload -Uz compinit && compinit\nsource %s/scripts/completions.zsh\n' "$INSTALL_DIR" >> "$HOME/.zshrc"
-      info "completion zsh ditambahkan ke ~/.zshrc"
-    fi ;;
-esac
+if [ -f "$HOME/.bashrc" ] && ! grep -q "dhybrid-completion" "$HOME/.bashrc" 2>/dev/null; then
+  printf '\n# dhybrid-completion\nsource %s/scripts/completions.bash\n' "$INSTALL_DIR" >> "$HOME/.bashrc"
+  info "completion bash ditambahkan ke ~/.bashrc"
+fi
+if [ -f "$HOME/.zshrc" ] && ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev/null; then
+  printf '\n# dhybrid-completion\nautoload -Uz compinit && compinit\nsource %s/scripts/completions.zsh\n' "$INSTALL_DIR" >> "$HOME/.zshrc"
+  info "completion zsh ditambahkan ke ~/.zshrc"
+fi
 
 # ---- selesai ----
 say "${C_BOLD}Selesai!${C_OFF}"
@@ -127,3 +145,6 @@ info "atau buka terminal baru, lalu: dhybrid repl"
 if [ -f "$INSTALL_DIR/.env" ] && ! grep -q "=" "$INSTALL_DIR/.env"; then
   warn "JANGAN LUPA: isi API key di $INSTALL_DIR/.env"
 fi
+
+# ---- tampilkan versi ----
+"$BIN_DIR/dhybrid" --version 2>/dev/null || true
