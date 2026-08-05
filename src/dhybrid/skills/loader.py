@@ -14,6 +14,7 @@ from dhybrid.skills.marketplace import (
     export_skill,
     import_skill,
     list_published_skills,
+    search_skills,
 )
 
 STOPWORDS = {
