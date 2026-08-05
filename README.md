@@ -33,8 +33,22 @@ Installer: clone repo ke `~/.dhybrid-agent`, buat venv, pasang dependensi,
 buat symlink `~/.local/bin/dhybrid`, dan siapkan `.env` dari `.env.example`.
 Lalu isi API key dan jalankan `dhybrid repl` (buka terminal baru).
 
-Variabel opsional: `DHYBRID_INSTALL_DIR`, `DHYBRID_BIN_DIR`, `DHYBRID_BRANCH`,
-`DHYBRID_REPO_URL`, `DHYBRID_SKIP_ENV=1` (lewati pembuatan .env).
+Variabel opsional:
+- `DHYBRID_INSTALL_DIR` — direktori instalasi (default: `~/.dhybrid-agent`)
+- `DHYBRID_BIN_DIR` — direktori symlink binary (default: `~/.local/bin`)
+- `DHYBRID_BRANCH` — branch git (default: `main`)
+- `DHYBRID_REPO_URL` — repo URL (default: GitHub)
+- `DHYBRID_SKIP_ENV=1` — lewati pembuatan `.env`
+- `DHYBRID_USE_UV=1` — gunakan `uv` untuk install lebih cepat (butuh `uv` terpasang)
+
+### Reinstall / Update via CLI
+
+```bash
+dhybrid install                    # reinstall/update via installer
+dhybrid install --use-uv           # pakai uv (lebih cepat)
+dhybrid install --branch main      # branch spesifik
+dhybrid install --install-dir ~/my-dhybrid  # direktori custom
+```
 
 ### Manual
 
@@ -67,6 +81,8 @@ dhybrid tokens                   # dashboard token & biaya semua sesi
 dhybrid resume <session_id>      # lanjutkan sesi lama
 dhybrid run --json "cek repo"    # output JSON terstruktur (scripting/CI)
 dhybrid doctor                   # diagnosa config, key, chain, allowlist, skill
+dhybrid install                  # reinstall/update installer
+dhybrid install --use-uv         # reinstall pakai uv (lebih cepat)
 ```
 
 ### Baca dokumen kantor
