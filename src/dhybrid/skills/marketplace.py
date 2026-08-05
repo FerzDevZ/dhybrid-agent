@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -83,7 +86,8 @@ def export_skill(skills_dir: str, skill_name: str, output_path: str) -> bool:
         output_file.write_text(json.dumps(package.to_dict(), indent=2, ensure_ascii=False))
         
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("export_skill gagal")
         return False
 
 
@@ -129,7 +133,8 @@ description: {package.description}
         skill_file.write_text(content, encoding="utf-8")
         
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("import_skill gagal")
         return False
 
 
@@ -155,9 +160,9 @@ def list_published_skills(skills_dir: str) -> list[dict[str, str]]:
         if not skill_file.exists():
             continue
         
+        name = skill_dir.name
         try:
             content = skill_file.read_text(encoding="utf-8")
-            name = skill_dir.name
             description = ""
             
             if content.startswith("---"):
@@ -173,7 +178,8 @@ def list_published_skills(skills_dir: str) -> list[dict[str, str]]:
                 "name": name,
                 "description": description,
             })
-        except Exception:  # noqa: BLE001, S112
+        except Exception as e:  # noqa: BLE001
+            logger.warning("lewatkan skill rusak: %s (%s)", name, type(e).__name__)
             continue
     
     return skills

@@ -6,9 +6,12 @@ max 3 skill, masing-masing dipotong max_chars.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from dhybrid.skills.marketplace import (
     export_skill,
@@ -341,7 +344,8 @@ def publish_skill(
     try:
         export_path = Path(marketplace_dir) / f"{skill_name}.json"
         return export_skill(skills_dir, skill_name, str(export_path))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("export_skill (loader) gagal: %s", skill_name)
         return False
 
 
@@ -367,7 +371,8 @@ def install_skill(
         if not package_path.exists():
             return False
         return import_skill(skills_dir, str(package_path), overwrite=overwrite)
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("install_skill (loader) gagal: %s", skill_name)
         return False
 
 
@@ -382,7 +387,8 @@ def list_marketplace_skills(marketplace_dir: str) -> list[dict[str, str]]:
     """
     try:
         return list_published_skills(marketplace_dir)
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("list_marketplace_skills gagal: %s", marketplace_dir)
         return []
 
 
@@ -398,7 +404,8 @@ def search_marketplace_skills(query: str, marketplace_dir: str) -> list[dict[str
     """
     try:
         return search_skills(query, marketplace_dir)
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.exception("search_marketplace_skills gagal: %s", marketplace_dir)
         return []
 
 
