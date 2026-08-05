@@ -24,7 +24,7 @@ class _BufferedStreamPrint:
 
     Di TTY: output stream langsung (responsif).
     Di non-TTY (pipe/CI): buffer per-baris — cegah output pecah karakter
-    demi karakter (misal 'H\\nai!\\n👋...' jadi 'Hai! 👋...').
+    demi karakter (misal 'H\\\\nai!\\\\n👋...' jadi 'Hai! 👋...').
     """
 
     def __init__(self) -> None:
@@ -36,7 +36,8 @@ class _BufferedStreamPrint:
             sys.stdout.write(text)
             sys.stdout.flush()
             return
-        # non-TTY: buffer sampai ada newline lengkap
+        # non-TTY: buffer hingga ada newline ATAU buffer penuh (>80 char)
+        # ATAU mengandung akhir kalimat (. ! ?) tanpa newline lanjut
         self._buf += text
         # Emit baris penuh (sampai newline terakhir)
         lines = self._buf.split("\n")
@@ -44,6 +45,13 @@ class _BufferedStreamPrint:
         self._buf = lines[-1]
         for line in lines[:-1]:
             sys.stdout.write(line + "\n")
+        # Jika buffer tidak ada newline tapi sudah >80 char, flush sebagian
+        if "\n" not in self._buf and len(self._buf) > 80:
+            # cari spasi terakhir untuk memotong kata
+            last_space = self._buf.rfind(" ")
+            if last_space > 40:
+                sys.stdout.write(self._buf[:last_space] + "\n")
+                self._buf = self._buf[last_space + 1:]
         sys.stdout.flush()
 
     def flush(self) -> None:
