@@ -21,7 +21,7 @@ context:
 
 tool:
   max_output_chars: 8000
-  allowlist: [terminal, read_file, write_file, apply_patch, grep, find_files, git_status, git_diff, git_commit, git_log, run_tests, tdd_status, todo_add, todo_list, todo_done, memory_set, memory_get, memory_search, subagent, web_fetch, web_search, http_request, ask_user, read_document, code_map, code_map_multi, dep_graph, semantic_search, orchestrator, mem_index, mem_search, mem_reset, browser, read_image, clarify, sys_info, scaffold, data_query, pdf_ops, xlsx_edit]
+  allowlist: [terminal, read_file, write_file, apply_patch, grep, find_files, git_status, git_diff, git_commit, git_log, run_tests, tdd_status, todo_add, todo_list, todo_done, memory_set, memory_get, memory_search, subagent, web_fetch, web_search, http_request, ask_user, read_document, code_map, code_map_multi, dep_graph, semantic_search, codegen_openapi, codegen_graphql, codegen_protobuf, orchestrator, mem_index, mem_search, mem_reset, browser, read_image, clarify, sys_info, scaffold, data_query, pdf_ops, xlsx_edit]
   # mcp_servers: daftar MCP server eksternal (stdio). Contoh:
   #   mcp_servers:
   #     - {name: fs, command: npx, args: ["-y", "@modelcontextprotocol/server-filesystem", "/path"]}
