@@ -134,6 +134,15 @@ class SessionContext:
         # Priority: explicit --cwd > auto-detected > shell cwd
         detected_cwd = _detect_project_root(cwd)
         self.cwd = detected_cwd
+        # CRITICAL: ubah process cwd juga. Tools (read_file/write_file/terminal)
+        # resolve path relatif terhadap process cwd (Path.cwd()), BUKAN ctx.cwd.
+        # Tanpa os.chdir → agent menulis file ke folder SALAH saat project ada
+        # di subdirectory (mis. user jalan dari parent folder).
+        import os
+        try:
+            os.chdir(self.cwd)
+        except OSError:
+            pass  # jika cwd tidak ada, biarkan process cwd tetap
         self.workspace = cfg.workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
         
@@ -148,11 +157,11 @@ class SessionContext:
         self.resumed_id: str | None = None
         self._resume_meta: dict | None = None
         if sid is None and resume:
-            prev = store.last_session_for_cwd(cwd)
+            prev = store.last_session_for_cwd(detected_cwd)
             if prev and any(store.last_messages(prev, n=1)):
                 self.resumed_id = prev
                 self._resume_meta = store.get_session(prev)
-        self.sid = sid or self.resumed_id or store.new_session(cwd=cwd)
+        self.sid = sid or self.resumed_id or store.new_session(cwd=detected_cwd)
         self.budget = TokenBudget(soft=cfg.budget.get("soft", 60000), hard=cfg.budget.get("hard", 120000))
         self.ctx = ContextManager(keep_recent=cfg.context.get("keep_recent", 8))
         # muat ringkasan & pesan terakhir sesi yang di-resume ke konteks awal

@@ -28,6 +28,11 @@ TOOLCALL_SINGLE_RE = re.compile(
     r"<tool_call>\s*<tool_name>(.*?)</tool_name>\s*<parameters>(.*?)</parameters>\s*</tool_call>",
     re.DOTALL,
 )
+TOOLCALL_ARGS_RE = re.compile(
+    r"<tool_call>\s*<tool_name>(.*?)</tool_name>\s*<arguments>(.*?)</arguments>\s*</tool_call>",
+    re.DOTALL,
+)
+ARG_TAG_RE = re.compile(r"<(\w+)>\s*(.*?)\s*</\1>", re.DOTALL)
 INVOKE_RE = re.compile(r'<invoke\s+name="([\w_-]+)"\s*>(.*?)' + INV_END, re.DOTALL)
 TOOLCALLS_RE = re.compile(r"<tool_calls>.*?</tool_calls>", re.DOTALL)
 FUNC_TAG_RE = re.compile(FSTART + r"\s*=\s*([\w_-]+)>(.*?)" + FEND, re.DOTALL)
@@ -227,8 +232,11 @@ def parse_tool_calls(text: str) -> list[dict]:
 
 
 def _parse_toolcall_single(text: str) -> list[dict]:
-    """Format: <tool_call><tool_name>X</tool_name><parameters>{JSON}</parameters></tool_call>"""
+    """Format: <tool_call><tool_name>X</tool_name><parameters>{JSON}</parameters></tool_call>
+    atau:   <tool_call><tool_name>X</tool_name><arguments><command>...</command></arguments></tool_call>
+    """
     calls: list[dict] = []
+    # format <parameters>{JSON}</parameters>
     for i, m in enumerate(TOOLCALL_SINGLE_RE.finditer(text)):
         name = m.group(1).strip()
         raw = m.group(2).strip()
@@ -238,6 +246,34 @@ def _parse_toolcall_single(text: str) -> list[dict]:
             args = {"command": raw} if raw else {}
         if isinstance(args, dict) and name:
             calls.append({"id": f"tc{i}", "name": name, "arguments": args})
+    # format <arguments><command>...</command></arguments> (tag per arg)
+    for j, m in enumerate(TOOLCALL_ARGS_RE.finditer(text)):
+        name = m.group(1).strip()
+        raw = m.group(2).strip()
+        if not name:
+            continue
+        args: dict = {}
+        for tm in ARG_TAG_RE.finditer(raw):
+            k = tm.group(1).strip()
+            v = tm.group(2).strip()
+            if k == "command":
+                args[k] = v
+            elif v.lower() in ("true", "false"):
+                args[k] = v.lower() == "true"
+            elif v.isdigit():
+                args[k] = int(v)
+            else:
+                args[k] = v
+        # fallback: jika tidak ada sub-tag, coba parse JSON
+        if not args:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    args = parsed
+            except json.JSONDecodeError:
+                args = {"command": raw}
+        if args:
+            calls.append({"id": f"tc-args{j}", "name": name, "arguments": args})
     return calls
 
 
@@ -257,16 +293,24 @@ def strip_tool_block(text: str) -> str:
     """Bersihkan semua markup panggilan tool agar teks final bersih/prosa."""
     text = TOOL_RE.sub("", text)
     text = TOOLCALL_SINGLE_RE.sub("", text)
+    text = TOOLCALL_ARGS_RE.sub("", text)
     text = INVOKE_RE.sub("", text)
     text = TOOLCALLS_RE.sub("", text)
     text = FUNC_TAG_RE.sub("", text)
     text = re.sub(
-        r"<\s*/?\s*(?:tool_call|tool_calls|tool_name|invoke|function|analysis|anteThinking|parameters?|parameters)\b[^>]*>",
+        r"<\s*/?\s*(?:tool_call|tool_calls|tool_name|invoke|function|analysis|anteThinking|parameters?|parameters|arguments)\b[^>]*>",
         "",
         text,
         flags=re.IGNORECASE,
     )
     text = re.sub(r"<\s*/?\s*arg_(?:key|value)\b[^>]*>", "", text, flags=re.IGNORECASE)
+    # tag arg di dalam <arguments> (command, timeout, path, dst) yang masih bocor
+    text = re.sub(
+        r"<\s*/?\s*(?:command|timeout|path|content|offset|limit|name|query|pattern|url|args?)\b[^>]*>",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
     # baris JSON telanjang {name/arguments}
     text = re.sub(
         r'^\{[^\n]*"name"\s*:\s*"[^"]+"[^\n]*\}\s*$',
