@@ -2,11 +2,11 @@ workspace: ~/.dhybrid
 
 model:
   # SATU model — dipilih user kapan saja: /settings atau dhybrid --model <preset>.
-  # Default: OpenCode Zen (gratis, tanpa API key butuh) via laguna-s-2.1-free
+  # Default: bynara-fast (gratis, tanpa API key butuh, lebih stabil)
   provider: openai
-  model: laguna-s-2.1-free
-  base_url: https://opencode.ai/zen/v1
-  api_key_env: OPENCODE_ZEN_API_KEY
+  model: agnes-2.5-flash
+  base_url: https://router.bynara.id/v1
+  api_key_env: BYNARA_API_KEY
   max_tokens: 4096
   temperature: 0.2
   chain: ["bynara-big", "openrouter-big", "anthropic-big"]  # escalation quality chain

@@ -123,7 +123,7 @@ def _get_parser(lang: str) -> tree_sitter.Parser | None:
     try:
         language = tree_sitter.Language(lang_func())
         return tree_sitter.Parser(language)
-    except (AttributeError, TypeError, ValueError, ImportError) as e:
+    except (AttributeError, TypeError, ValueError, ImportError):
         # Provide helpful error message about missing grammar
         return None
 

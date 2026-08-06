@@ -22,7 +22,6 @@ IGNORED_DIRNAMES = {
     ".venv",
     "venv",
     "node_modules",
-    "vendor",
     "dist",
     "build",
     ".next",
@@ -46,7 +45,7 @@ IGNORED_DIRNAMES = {
     "obj",
     "pkg",
     "pkg.mod",
-    "vendor",  # Go vendor (duplicate but safe)
+    "vendor",
 }
 
 

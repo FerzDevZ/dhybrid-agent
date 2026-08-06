@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import threading
+from collections.abc import Callable
+
+from dhybrid.subagents.delegate import delegate
 
 
 def register(reg, max_chars: int = 8000, client_factory: Callable | None = None) -> None:

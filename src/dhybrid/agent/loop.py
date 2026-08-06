@@ -509,6 +509,8 @@ class AgentLoop:
                 result.quality_score = score
                 result.files_created = v["files_created"]
                 result.tests_passed = v["tests_passed"]
+                # needs_change_check() = True berarti "tidak ada yg perlu diubah" (task selesai)
+                # stopped_early = True berarti loop berhenti sebelum max_steps (bisa success/stuck)
                 result.stopped_early = needs_change_check(last_text)
                 is_empty = not last_text.strip()
                 asks_qa = _ends_with_question(last_text)

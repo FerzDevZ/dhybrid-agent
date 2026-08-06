@@ -67,9 +67,11 @@ def cmd_run(args) -> int:
     esc_msg = " (escalation: model → kuat)" if result.escalated_quality else ""
     if result.stopped_early:
         esc_msg += " (belum ada bukti file dibuat)"
+    # stopped_early=True bisa berarti task selesai natural atau STUCK
+    from dhybrid.efficiency.lazy import needs_change_check
     from dhybrid.ui.rich_ui import print_done
-
-    label = " STUCK" if result.stopped_early else " DONE"
+    is_natural_stop = needs_change_check(result.final_text)
+    label = " DONE" if (result.stopped_early and is_natural_stop) else (" STUCK" if result.stopped_early else " DONE")
     print_done(
         f"{label} — {ctx.budget.used:,} token · ${ctx.last_cost:.4f} "
         f"· kualitas {result.quality_score}/100{escl_tag} "

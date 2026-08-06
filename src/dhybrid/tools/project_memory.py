@@ -54,7 +54,7 @@ def _connect(db: str | None = None):
             conn.execute(
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{_DIM}])"
             )
-        except Exception:  # noqa: BLE001,S110
+        except Exception:  # noqa: BLE001
             vec_ok = False
     conn.commit()
     return conn, vec_ok
