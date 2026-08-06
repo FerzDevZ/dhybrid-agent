@@ -15,8 +15,9 @@ def build_tools(
     memory_store: MemoryStore | None = None,
     ask_state=None,
     clarify_state=None,
+    base_dir=None,
 ) -> ToolRegistry:
-    reg = ToolRegistry(allowlist=cfg.tool.get("allowlist"))
+    reg = ToolRegistry(allowlist=cfg.tool.get("allowlist"), base_dir=base_dir)
     max_chars = cfg.tool.get("max_output_chars", 8000)
     from dhybrid.tools import (
         ask,

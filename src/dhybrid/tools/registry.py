@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import chdir
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from dhybrid.tools.validate import validate_args
@@ -18,10 +20,15 @@ class ToolSpec:
 
 
 class ToolRegistry:
-    def __init__(self, allowlist: list[str] | None = None):
+    def __init__(self, allowlist: list[str] | None = None, base_dir: str | Path | None = None):
         self._tools: dict[str, ToolSpec] = {}
         self.allowlist = set(allowlist or [])
         self.tool_count: dict[str, int] = {}
+        # Project root — tool (read/write/terminal) berjalan DI SINI, bukan di
+        # folder tempat user menjalankan `dhybrid`. Dipakai per eksekusi tool
+        # (chdir scoped, dikembalikan setelah selesai) supaya tidak mengubah
+        # working directory global & merusak proses lain/test.
+        self.base_dir = Path(base_dir).resolve() if base_dir else None
 
     def register(self, name: str, description: str, parameters: dict, fn: Callable[..., Any]) -> None:
         self._tools[name] = ToolSpec(name, description, parameters, fn)
@@ -53,7 +60,12 @@ class ToolRegistry:
         except ValueError as e:
             return f"ERROR argumen {name}: {e}"
         try:
-            out = self._tools[name].fn(**cleaned)
+            if self.base_dir and self.base_dir != Path.cwd().resolve():
+                # jalankan tool di project root, lalu kembalikan cwd semula
+                with chdir(self.base_dir):
+                    out = self._tools[name].fn(**cleaned)
+            else:
+                out = self._tools[name].fn(**cleaned)
             return str(out)
         except TypeError as e:
             return f"ERROR argumen {name}: {e}"

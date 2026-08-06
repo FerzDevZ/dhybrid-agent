@@ -134,15 +134,6 @@ class SessionContext:
         # Priority: explicit --cwd > auto-detected > shell cwd
         detected_cwd = _detect_project_root(cwd)
         self.cwd = detected_cwd
-        # CRITICAL: ubah process cwd juga. Tools (read_file/write_file/terminal)
-        # resolve path relatif terhadap process cwd (Path.cwd()), BUKAN ctx.cwd.
-        # Tanpa os.chdir → agent menulis file ke folder SALAH saat project ada
-        # di subdirectory (mis. user jalan dari parent folder).
-        import os
-        try:
-            os.chdir(self.cwd)
-        except OSError:
-            pass  # jika cwd tidak ada, biarkan process cwd tetap
         self.workspace = cfg.workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
         
@@ -189,12 +180,15 @@ class SessionContext:
         self.clarify_state = ClarifyState(interactive=interactive)
         self.clarify_just_answered = False  # turn ini sudah clarify → jangan tanya lagi
         self.forced_skills: list[str] = []  # /skill <nama> — paksa inject tiap prompt
+        # base_dir = project root: tools (read/write/terminal) berjalan di SINI
+        # (chdir scoped per eksekusi tool), bukan di folder user menjalankan dhybrid.
         self.tools: ToolRegistry = build_tools(
             cfg,
             client_factory=self._fresh_client,
             memory_store=self.memory,
             ask_state=self.ask_state,
             clarify_state=self.clarify_state,
+            base_dir=self.cwd,
         )
 
         self.router: HybridRouter | None = self._build_router()
