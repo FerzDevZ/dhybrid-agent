@@ -20,6 +20,75 @@ from dhybrid.tools import build_tools
 from dhybrid.tools.registry import ToolRegistry
 from dhybrid.ui.commands import PROVIDERS, _load_provider_enabled
 
+# Project markers for auto-detection (ordered by specificity)
+PROJECT_MARKERS = [
+    # Python
+    "pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "pipfile", "poetry.lock",
+    # Node.js
+    "package.json", "pnpm-lock.yaml", "yarn.lock", "pnpm-workspace.yaml",
+    # Rust
+    "Cargo.toml", "Cargo.lock",
+    # Go
+    "go.mod", "go.sum", "go.work",
+    # Java
+    "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts",
+    # .NET
+    "*.csproj", "*.fsproj", "*.vbproj", "*.sln",
+    # PHP
+    "composer.json", "composer.lock",
+    # Ruby
+    "Gemfile", "Gemfile.lock",
+    # General
+    ".git", ".hg", ".svn",
+    # Config
+    "Makefile", "justfile", "Taskfile.yml", "docker-compose.yml", "docker-compose.yaml",
+]
+
+
+def _detect_project_root(cwd: str) -> str:
+    """Detect project root by looking for markers in cwd, subdirectories, and parents.
+    
+    Returns the detected project root, or original cwd if none found.
+    Priority: cwd > subdirectory (one level) > parents
+    """
+    p = Path(cwd).resolve()
+    
+    # 1. Check cwd itself first
+    for marker in PROJECT_MARKERS:
+        if "*" in marker:
+            if list(p.glob(marker)):
+                return str(p)
+        elif (p / marker).exists():
+            return str(p)
+    
+    # 2. Check immediate subdirectories (common case: user runs from parent of project)
+    try:
+        for subdir in p.iterdir():
+            if subdir.is_dir() and not subdir.name.startswith('.'):
+                for marker in PROJECT_MARKERS:
+                    if "*" in marker:
+                        if list(subdir.glob(marker)):
+                            return str(subdir)
+                    elif (subdir / marker).exists():
+                        return str(subdir)
+    except (OSError, PermissionError):
+        pass
+    
+    # 3. Check parents (standard project root detection)
+    for parent in list(p.parents):
+        for marker in PROJECT_MARKERS:
+            if "*" in marker:
+                if list(parent.glob(marker)):
+                    return str(parent)
+            elif (parent / marker).exists():
+                return str(parent)
+        # Stop at filesystem root
+        if parent == parent.parent:
+            break
+    
+    return cwd
+
+
 BASE_PROMPT = (
     "Kamu adalah dhybrid-agent, coding agent CLI yang POWERFUL — agresif eksekusi, hemat token. "
     "TUJUH PATOKAN EMAS (IKUTI SELALU ATAS SEGALA HAL):\n"
@@ -61,9 +130,17 @@ class SessionContext:
     ):
         self.cfg = cfg
         self.store = store
-        self.cwd = cwd
+        # Auto-detect project root if not explicitly set via --cwd
+        # Priority: explicit --cwd > auto-detected > shell cwd
+        detected_cwd = _detect_project_root(cwd)
+        self.cwd = detected_cwd
         self.workspace = cfg.workspace
         self.workspace.mkdir(parents=True, exist_ok=True)
+        
+        # Log if project root was auto-detected (different from shell cwd)
+        if detected_cwd != cwd:
+            import sys
+            print(f"[dhybrid] Auto-detected project root: {detected_cwd}", file=sys.stderr)
         # ---- auto-resume: lanjutkan sesi terakhir di proyek yang sama ----
         # (Task 6) `dhybrid repl` tidak "reset" — konteks & judul sesi lama dimuat.
         # Cari sesi SEBELUM membuat yang baru, supaya `new_session` tidak menjadi

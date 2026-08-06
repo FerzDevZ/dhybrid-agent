@@ -53,7 +53,11 @@ def build_system_prompt(base: str, workspace_hint: str = "") -> str:
 
 
 def needs_change_check(last_assistant_text: str) -> bool:
-    """Deteksi sinyal 'tidak ada yang perlu diubah' untuk early-stop."""
+    """Deteksi sinyal 'tidak ada yang perlu diubah' untuk early-stop.
+    
+    Harus konsisten dengan COMPLETION_SIGNALS di agent/loop.py agar
+    stopped_early + looks_complete = DONE (bukan STUCK).
+    """
     text = last_assistant_text.upper()
     return any(
         phrase in text
@@ -64,6 +68,15 @@ def needs_change_check(last_assistant_text: str) -> bool:
             "ALL DONE",
             "NOTHING TO DO",
             "TIDAK PERLU DIUBAH",
+            "SELESAI",
+            "BERES",
+            "DONE",
+            "COMPLETED",
+            "SUCCESS",
+            "BERFUNGSI",
+            "SIAP DIPAKAI",
+            "BERHASIL",
+            "DIBUAT",
         )
     )
 
