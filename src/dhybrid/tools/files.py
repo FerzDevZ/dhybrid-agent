@@ -15,22 +15,25 @@ def _fuzzy_resolve(path: str) -> Path | None:
     p = Path(path)
     if p.exists():
         return p
+    candidates: list[Path] = []
     for ext in (
         ".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".html", ".css",
         ".txt", ".md", ".yaml", ".yml", ".toml", ".sh", ".env", ".ini",
     ):
         cand = Path(str(p) + ext)
         if cand.exists():
-            return cand
+            candidates.append(cand)
     # cari di parent dir: file yang startswith nama yang diketik
     parent = p.parent
     if parent.is_dir():
         try:
-            hits = [f for f in parent.iterdir() if f.is_file() and f.name.startswith(p.name)]
+            candidates += [f for f in parent.iterdir() if f.is_file() and f.name.startswith(p.name)]
         except OSError:
-            hits = []
-        if len(hits) == 1:
-            return hits[0]
+            pass
+    # unik & TIDAK ambigu
+    unique = {str(c) for c in candidates}
+    if len(unique) == 1:
+        return Path(next(iter(unique)))
     return None
 
 
