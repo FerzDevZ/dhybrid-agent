@@ -52,11 +52,17 @@ class HybridRouter:
     def _classify_cached(self, prompt: str) -> str:
         if self.cache:
             msgs = [ChatMessage(role="user", content=prompt)]
-            hit = self.cache.get("classifier", msgs)
+            # Pass model config to avoid cache collision between different model configs
+            model_config = {
+                "model": getattr(self.big, "model", "unknown"),
+                "provider": getattr(self.big, "provider", "unknown"),
+                "temperature": getattr(self.big, "temperature", 0.2),
+            }
+            hit = self.cache.get("classifier", msgs, model_config)
             if hit in ("small", "big"):
                 return hit
             cls = classify_task(prompt)
-            self.cache.set("classifier", msgs, cls)
+            self.cache.set("classifier", msgs, cls, model_config)
             return cls
         return classify_task(prompt)
 

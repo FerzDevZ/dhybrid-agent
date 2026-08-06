@@ -39,9 +39,6 @@ def _connect(db: str | None = None):
         import sqlite_vec
 
         sqlite_vec.load(conn)
-        conn.execute(
-            f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{_DIM}])"
-        )
         vec_ok = True
     except Exception:  # noqa: BLE001,S110 — extension tak tersedia → fallback Python
         pass
@@ -51,6 +48,14 @@ def _connect(db: str | None = None):
         "path TEXT NOT NULL, start_line INTEGER, end_line INTEGER,"
         "text TEXT, vec TEXT)"
     )
+    # Only create vec_chunks virtual table if extension loaded successfully
+    if vec_ok:
+        try:
+            conn.execute(
+                f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{_DIM}])"
+            )
+        except Exception:  # noqa: BLE001,S110
+            vec_ok = False
     conn.commit()
     return conn, vec_ok
 

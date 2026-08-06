@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import threading
 
 
 def register(reg, max_chars: int = 8000, client_factory: Callable | None = None) -> None:
     """client_factory() -> LLMClient baru utk subagent (dibuat per panggilan)."""
     state = {"active": 0, "max_active": 3, "max_result_chars": max_chars}
+    _lock = threading.Lock()
 
     def subagent(goal: str) -> str:
         if client_factory is None:
             return "ERROR: tool subagent tidak aktif (factory belum di-set)"
-        if state["active"] >= state["max_active"]:
-            return "ERROR: batas subagent aktif tercapai (3) — selesaikan dulu atau gabungkan tugas"
-        from dhybrid.subagents.delegate import delegate
-
-        state["active"] += 1
+        
+        # Atomic check-and-increment
+        with _lock:
+            if state["active"] >= state["max_active"]:
+                return "ERROR: batas subagent aktif tercapai (3) — selesaikan dulu atau gabungkan tugas"
+            state["active"] += 1
+        
         try:
             client = client_factory()
             result = delegate(goal, client, reg, _SUBAGENT_SYSTEM)
@@ -25,7 +29,8 @@ def register(reg, max_chars: int = 8000, client_factory: Callable | None = None)
                 text += "\n[hasil subagent dipotong]"
             return f"[subagent selesai dalam {result.steps} langkah]\n{text}"
         finally:
-            state["active"] -= 1
+            with _lock:
+                state["active"] -= 1
 
     reg.register(
         "subagent",

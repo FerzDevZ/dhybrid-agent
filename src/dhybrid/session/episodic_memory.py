@@ -36,6 +36,7 @@ class EpisodicMemory:
         db_path: str | Path,
         model_name: str = "all-MiniLM-L6-v2",
         embedding_dim: int = 384,
+        rebuild_threshold: int = 100,
     ):
         """Initialize episodic memory.
 
@@ -43,14 +44,18 @@ class EpisodicMemory:
             db_path: Path to SQLite database
             model_name: Sentence transformer model for embeddings
             embedding_dim: Dimension of embeddings (384 for all-MiniLM-L6-v2)
+            rebuild_threshold: Number of deletions before triggering index rebuild
         """
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.model_name = model_name
         self.embedding_dim = embedding_dim
+        self.rebuild_threshold = rebuild_threshold
         self._model: SentenceTransformer | None = None
         self._index: faiss.Index | None = None
         self._memory_ids: list[int] = []
+        self._deleted_ids: set[int] = set()
+        self._deletions_since_rebuild = 0
         self._conn = sqlite3.connect(self.db_path)
         self._init_db()
         self._load_existing_embeddings()
@@ -64,11 +69,13 @@ class EpisodicMemory:
         return self._model
 
     def _get_index(self) -> faiss.Index:
-        """Get or create FAISS index."""
+        """Get or create FAISS index with ID mapping for efficient deletion."""
         if self._index is None:
             if faiss is None:
                 raise RuntimeError("faiss-cpu not installed. Run: pip install faiss-cpu")
-            self._index = faiss.IndexFlatIP(self.embedding_dim)  # Inner product for cosine similarity
+            # Use IndexIDMap to support removal by ID
+            base_index = faiss.IndexFlatIP(self.embedding_dim)  # Inner product for cosine similarity
+            self._index = faiss.IndexIDMap(base_index)
         return self._index
 
     def _init_db(self) -> None:
@@ -108,7 +115,15 @@ class EpisodicMemory:
         if embeddings:
             self._memory_ids = ids
             index = self._get_index()
-            index.add(np.vstack(embeddings).astype(np.float32))
+            # Add with IDs for IndexIDMap
+            np_ids = np.array(ids, dtype=np.int64)
+            np_embeddings = np.vstack(embeddings).astype(np.float32)
+            index.add_with_ids(np_embeddings, np_ids)
+
+    def _maybe_rebuild_index(self) -> None:
+        """Rebuild index if deletions exceed threshold."""
+        if self._deletions_since_rebuild >= self.rebuild_threshold:
+            self._rebuild_index()
 
     def remember(
         self,
@@ -140,23 +155,30 @@ class EpisodicMemory:
         emb_blob = embedding.astype(np.float32).tobytes()
         
         if existing:
-            # Update existing
+            # Update existing - update both DB and FAISS index incrementally
+            mem_id = existing[0]
             self._conn.execute(
                 "UPDATE episodic_memory SET content=?, tags=?, timestamp=?, embedding=? WHERE id=?",
-                (content, tags_json, timestamp, emb_blob, existing[0])
+                (content, tags_json, timestamp, emb_blob, mem_id)
             )
-            # Update FAISS index - rebuild (simple approach)
-            self._rebuild_index()
+            # Update FAISS index: remove old, add new with same ID
+            index = self._get_index()
+            try:
+                index.remove_ids(np.array([mem_id], dtype=np.int64))
+            except RuntimeError:
+                pass  # ID might not be in index
+            index.add_with_ids(embedding.reshape(1, -1).astype(np.float32), np.array([mem_id], dtype=np.int64))
         else:
             # Insert new
             cursor = self._conn.execute(
                 "INSERT INTO episodic_memory (key, content, tags, timestamp, embedding) VALUES (?,?,?,?,?)",
                 (key, content, tags_json, timestamp, emb_blob)
             )
-            self._memory_ids.append(cursor.lastrowid)
-            # Add to FAISS index
+            mem_id = cursor.lastrowid
+            self._memory_ids.append(mem_id)
+            # Add to FAISS index with ID
             index = self._get_index()
-            index.add(embedding.reshape(1, -1).astype(np.float32))
+            index.add_with_ids(embedding.reshape(1, -1).astype(np.float32), np.array([mem_id], dtype=np.int64))
         
         self._conn.commit()
         return f"OK: disimpan ({key})"
@@ -177,12 +199,14 @@ class EpisodicMemory:
         model = self._get_model()
         query_embedding = model.encode([query], convert_to_numpy=True, normalize_embeddings=True)
         
-        scores, indices = self._index.search(query_embedding.astype(np.float32), min(limit, self._index.ntotal))
+        # Search with extra to account for deleted entries
+        search_limit = min(limit + len(self._deleted_ids), self._index.ntotal)
+        scores, indices = self._index.search(query_embedding.astype(np.float32), search_limit)
         
         results = []
         for score, idx in zip(scores[0], indices[0]):
-            if idx >= 0 and idx < len(self._memory_ids):
-                memory_id = self._memory_ids[idx]
+            if idx >= 0 and idx not in self._deleted_ids:
+                memory_id = int(idx)
                 row = self._conn.execute(
                     "SELECT id, content, tags, timestamp FROM episodic_memory WHERE id=?",
                     (memory_id,)
@@ -195,6 +219,8 @@ class EpisodicMemory:
                         "timestamp": row[3],
                         "score": float(score),
                     })
+                if len(results) >= limit:
+                    break
         
         return results
 
@@ -226,35 +252,45 @@ class EpisodicMemory:
         
         for (mem_id,) in rows:
             self._conn.execute("DELETE FROM episodic_memory WHERE id=?", (mem_id,))
+            # Mark as deleted in FAISS index (lazy deletion)
+            self._deleted_ids.add(mem_id)
             if mem_id in self._memory_ids:
                 self._memory_ids.remove(mem_id)
+            self._deletions_since_rebuild += 1
         
         self._conn.commit()
-        self._rebuild_index()
+        self._maybe_rebuild_index()
         return f"OK: dihapus ({key})"
 
     def _rebuild_index(self) -> None:
-        """Rebuild FAISS index from database."""
+        """Rebuild FAISS index from database (clean up deleted entries)."""
         if faiss is None:
             return
         
-        self._index = faiss.IndexFlatIP(self.embedding_dim)
+        self._index = faiss.IndexIDMap(faiss.IndexFlatIP(self.embedding_dim))
         self._memory_ids = []
+        self._deleted_ids.clear()
+        self._deletions_since_rebuild = 0
         
         rows = self._conn.execute(
             "SELECT id, embedding FROM episodic_memory WHERE embedding IS NOT NULL"
         ).fetchall()
         
         embeddings = []
+        ids = []
         for row_id, emb_blob in rows:
             if emb_blob:
                 emb = np.frombuffer(emb_blob, dtype=np.float32)
                 if emb.shape[0] == self.embedding_dim:
                     embeddings.append(emb)
-                    self._memory_ids.append(row_id)
+                    ids.append(row_id)
         
         if embeddings:
-            self._index.add(np.vstack(embeddings).astype(np.float32))
+            self._memory_ids = ids
+            index = self._get_index()
+            np_ids = np.array(ids, dtype=np.int64)
+            np_embeddings = np.vstack(embeddings).astype(np.float32)
+            index.add_with_ids(np_embeddings, np_ids)
 
     def close(self) -> None:
         """Close database connection."""

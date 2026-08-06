@@ -6,6 +6,32 @@ import subprocess
 from pathlib import Path
 
 
+def _find_maven_project(workspace: str) -> Path | None:
+    """Find pom.xml file in workspace or subdirectories (for multi-module Maven projects)."""
+    workspace_path = Path(workspace)
+    # Check root first
+    if (workspace_path / "pom.xml").exists():
+        return workspace_path
+    # Search subdirectories for multi-module projects
+    for pom in workspace_path.rglob("pom.xml"):
+        if "target" not in pom.parts:
+            return pom.parent
+    return None
+
+
+def _find_gradle_project(workspace: str) -> Path | None:
+    """Find build.gradle(.kts) file in workspace or subdirectories (for multi-project Gradle builds)."""
+    workspace_path = Path(workspace)
+    # Check root first
+    if (workspace_path / "build.gradle.kts").exists() or (workspace_path / "build.gradle").exists():
+        return workspace_path
+    # Search subdirectories
+    for gradle in workspace_path.rglob("build.gradle*"):
+        if "build" not in gradle.parts and "target" not in gradle.parts and ".gradle" not in gradle.parts:
+            return gradle.parent
+    return None
+
+
 def _run_mvn_cmd(workspace: str, args: list[str], timeout: int = 300) -> str:
     """Run a maven command in the workspace."""
     try:
@@ -56,158 +82,158 @@ def mvn_test(workspace: str, args: str = "") -> str:
     """Run mvn test in the workspace.
 
     Args:
-        workspace: Path to Maven project directory
+        workspace: Path to Maven project directory (or parent of multi-module project)
         args: Additional arguments to pass to 'mvn test' (e.g., '-Dtest=MyTest')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "pom.xml").exists():
-        return f"ERROR: No pom.xml found in {workspace}"
+    mod_dir = _find_maven_project(workspace)
+    if mod_dir is None:
+        return f"ERROR: No pom.xml found in {workspace} or subdirectories"
     
     cmd_args = ["test"]
     if args:
         cmd_args.extend(args.split())
-    return _run_mvn_cmd(workspace, cmd_args)
+    return _run_mvn_cmd(str(mod_dir), cmd_args)
 
 
 def mvn_build(workspace: str, args: str = "") -> str:
     """Run mvn compile (or build) in the workspace.
 
     Args:
-        workspace: Path to Maven project directory
+        workspace: Path to Maven project directory (or parent of multi-module project)
         args: Additional arguments (e.g., '-DskipTests')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "pom.xml").exists():
-        return f"ERROR: No pom.xml found in {workspace}"
+    mod_dir = _find_maven_project(workspace)
+    if mod_dir is None:
+        return f"ERROR: No pom.xml found in {workspace} or subdirectories"
     
     cmd_args = ["compile"]
     if args:
         cmd_args.extend(args.split())
-    return _run_mvn_cmd(workspace, cmd_args)
+    return _run_mvn_cmd(str(mod_dir), cmd_args)
 
 
 def mvn_compile(workspace: str, args: str = "") -> str:
     """Run mvn compile in the workspace.
 
     Args:
-        workspace: Path to Maven project directory
+        workspace: Path to Maven project directory (or parent of multi-module project)
         args: Additional arguments (e.g., '-DskipTests')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "pom.xml").exists():
-        return f"ERROR: No pom.xml found in {workspace}"
+    mod_dir = _find_maven_project(workspace)
+    if mod_dir is None:
+        return f"ERROR: No pom.xml found in {workspace} or subdirectories"
     
     cmd_args = ["compile"]
     if args:
         cmd_args.extend(args.split())
-    return _run_mvn_cmd(workspace, cmd_args)
+    return _run_mvn_cmd(str(mod_dir), cmd_args)
 
 
 def mvn_package(workspace: str, args: str = "") -> str:
     """Run mvn package in the workspace.
 
     Args:
-        workspace: Path to Maven project directory
+        workspace: Path to Maven project directory (or parent of multi-module project)
         args: Additional arguments (e.g., '-DskipTests')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "pom.xml").exists():
-        return f"ERROR: No pom.xml found in {workspace}"
+    mod_dir = _find_maven_project(workspace)
+    if mod_dir is None:
+        return f"ERROR: No pom.xml found in {workspace} or subdirectories"
     
     cmd_args = ["package"]
     if args:
         cmd_args.extend(args.split())
-    return _run_mvn_cmd(workspace, cmd_args)
+    return _run_mvn_cmd(str(mod_dir), cmd_args)
 
 
 def mvn_clean(workspace: str) -> str:
     """Run mvn clean in the workspace.
 
     Args:
-        workspace: Path to Maven project directory
+        workspace: Path to Maven project directory (or parent of multi-module project)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "pom.xml").exists():
-        return f"ERROR: No pom.xml found in {workspace}"
+    mod_dir = _find_maven_project(workspace)
+    if mod_dir is None:
+        return f"ERROR: No pom.xml found in {workspace} or subdirectories"
     
-    return _run_mvn_cmd(workspace, ["clean"])
+    return _run_mvn_cmd(str(mod_dir), ["clean"])
 
 
 def gradle_test(workspace: str, args: str = "") -> str:
     """Run gradle test in the workspace.
 
     Args:
-        workspace: Path to Gradle project directory
+        workspace: Path to Gradle project directory (or parent of multi-project build)
         args: Additional arguments (e.g., '--tests MyTest')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "build.gradle.kts").exists() and not (workspace_path / "build.gradle").exists():
-        return f"ERROR: No build.gradle(.kts) found in {workspace}"
+    gradle_dir = _find_gradle_project(workspace)
+    if gradle_dir is None:
+        return f"ERROR: No build.gradle(.kts) found in {workspace} or subdirectories"
     
     cmd_args = ["test"]
     if args:
         cmd_args.extend(args.split())
-    return _run_gradle_cmd(workspace, cmd_args)
+    return _run_gradle_cmd(str(gradle_dir), cmd_args)
 
 
 def gradle_build(workspace: str, args: str = "") -> str:
     """Run gradle build in the workspace.
 
     Args:
-        workspace: Path to Gradle project directory
+        workspace: Path to Gradle project directory (or parent of multi-project build)
         args: Additional arguments (e.g., '-x test')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "build.gradle.kts").exists() and not (workspace_path / "build.gradle").exists():
-        return f"ERROR: No build.gradle(.kts) found in {workspace}"
+    gradle_dir = _find_gradle_project(workspace)
+    if gradle_dir is None:
+        return f"ERROR: No build.gradle(.kts) found in {workspace} or subdirectories"
     
     cmd_args = ["build"]
     if args:
         cmd_args.extend(args.split())
-    return _run_gradle_cmd(workspace, cmd_args)
+    return _run_gradle_cmd(str(gradle_dir), cmd_args)
 
 
 def gradle_check(workspace: str, args: str = "") -> str:
     """Run gradle check (includes checkstyle, spotbugs if configured).
 
     Args:
-        workspace: Path to Gradle project directory
+        workspace: Path to Gradle project directory (or parent of multi-project build)
         args: Additional arguments
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "build.gradle.kts").exists() and not (workspace_path / "build.gradle").exists():
-        return f"ERROR: No build.gradle(.kts) found in {workspace}"
+    gradle_dir = _find_gradle_project(workspace)
+    if gradle_dir is None:
+        return f"ERROR: No build.gradle(.kts) found in {workspace} or subdirectories"
     
     cmd_args = ["check"]
     if args:
         cmd_args.extend(args.split())
-    return _run_gradle_cmd(workspace, cmd_args)
+    return _run_gradle_cmd(str(gradle_dir), cmd_args)
 
 
 def spotbugs_check(workspace: str) -> str:
     """Run SpotBugs static analysis.
 
     Args:
-        workspace: Path to Gradle project directory
+        workspace: Path to Gradle project directory (or parent of multi-project build)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "build.gradle.kts").exists() and not (workspace_path / "build.gradle").exists():
-        return f"ERROR: No build.gradle(.kts) found in {workspace}"
+    gradle_dir = _find_gradle_project(workspace)
+    if gradle_dir is None:
+        return f"ERROR: No build.gradle(.kts) found in {workspace} or subdirectories"
     
-    return _run_gradle_cmd(workspace, ["spotbugsMain"])
+    return _run_gradle_cmd(str(gradle_dir), ["spotbugsMain"])
 
 
 def checkstyle_check(workspace: str) -> str:
     """Run Checkstyle for code style checking.
 
     Args:
-        workspace: Path to Gradle project directory
+        workspace: Path to Gradle project directory (or parent of multi-project build)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "build.gradle.kts").exists() and not (workspace_path / "build.gradle").exists():
-        return f"ERROR: No build.gradle(.kts) found in {workspace}"
+    gradle_dir = _find_gradle_project(workspace)
+    if gradle_dir is None:
+        return f"ERROR: No build.gradle(.kts) found in {workspace} or subdirectories"
     
-    return _run_gradle_cmd(workspace, ["checkstyleMain"])
+    return _run_gradle_cmd(str(gradle_dir), ["checkstyleMain"])
 
 
 def register(reg, max_chars: int = 8000) -> None:

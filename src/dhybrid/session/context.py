@@ -163,6 +163,9 @@ class SessionContext:
                 self.skill_candidates = state.get("skill_candidates", [])
                 self.skill_digest_shown = state.get("skill_digest_shown", False)
                 self.skill_suggested = state.get("skill_suggested", False)
+                # Restore ask/clarify counters
+                self.ask_state.count = state.get("ask_count", 0)
+                self.clarify_state.count = state.get("clarify_count", 0)
 
     # ---------- build ----------
 
@@ -321,6 +324,9 @@ class SessionContext:
                 "skill_candidates": self.skill_candidates,
                 "skill_digest_shown": self.skill_digest_shown,
                 "skill_suggested": self.skill_suggested,
+                # Persist ask/clarify counters
+                "ask_count": self.ask_state.count,
+                "clarify_count": self.clarify_state.count,
             },
         )
 

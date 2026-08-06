@@ -6,6 +6,26 @@ import subprocess
 from pathlib import Path
 
 
+def _find_dotnet_project(workspace: str) -> Path | None:
+    """Find .csproj/.sln file in workspace or subdirectories (for multi-project solutions)."""
+    workspace_path = Path(workspace)
+    # Check root first for solution file
+    for sln in workspace_path.glob("*.sln"):
+        return workspace_path
+    # Check root first for project file
+    for csproj in workspace_path.glob("*.csproj"):
+        return workspace_path
+    # Search subdirectories for solution file
+    for sln in workspace_path.rglob("*.sln"):
+        if "bin" not in sln.parts and "obj" not in sln.parts:
+            return sln.parent
+    # Search subdirectories for project file
+    for csproj in workspace_path.rglob("*.csproj"):
+        if "bin" not in csproj.parts and "obj" not in csproj.parts:
+            return csproj.parent
+    return None
+
+
 def _run_dotnet_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
     """Run a dotnet command in the workspace."""
     try:
@@ -33,149 +53,122 @@ def dotnet_test(workspace: str, args: str = "") -> str:
     """Run dotnet test in the workspace.
 
     Args:
-        workspace: Path to .NET project directory
-        args: Additional arguments to pass to 'dotnet test' (e.g., '--filter', '--logger')
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
+        args: Additional arguments (e.g., '--filter FullyQualifiedName~MyTest', '--no-build')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        # Check for any .csproj file
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
     cmd_args = ["test"]
     if args:
         cmd_args.extend(args.split())
-    return _run_dotnet_cmd(workspace, cmd_args)
+    return _run_dotnet_cmd(str(proj_dir), cmd_args)
 
 
 def dotnet_build(workspace: str, args: str = "") -> str:
     """Run dotnet build in the workspace.
 
     Args:
-        workspace: Path to .NET project directory
-        args: Additional arguments (e.g., '-c Release', '--no-restore')
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
+        args: Additional arguments (e.g., '--configuration Release', '--no-restore')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
     cmd_args = ["build"]
     if args:
         cmd_args.extend(args.split())
-    return _run_dotnet_cmd(workspace, cmd_args)
+    return _run_dotnet_cmd(str(proj_dir), cmd_args)
 
 
-def dotnet_restore(workspace: str, args: str = "") -> str:
+def dotnet_restore(workspace: str) -> str:
     """Run dotnet restore in the workspace.
 
     Args:
-        workspace: Path to .NET project directory
-        args: Additional arguments
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
-    cmd_args = ["restore"]
-    if args:
-        cmd_args.extend(args.split())
-    return _run_dotnet_cmd(workspace, cmd_args)
+    return _run_dotnet_cmd(str(proj_dir), ["restore"])
 
 
 def dotnet_clean(workspace: str) -> str:
     """Run dotnet clean in the workspace.
 
     Args:
-        workspace: Path to .NET project directory
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
-    return _run_dotnet_cmd(workspace, ["clean"])
+    return _run_dotnet_cmd(str(proj_dir), ["clean"])
 
 
 def dotnet_fmt(workspace: str, args: str = "") -> str:
-    """Run dotnet format to format C# source code.
+    """Run dotnet format in the workspace (requires dotnet-format tool).
 
     Args:
-        workspace: Path to .NET project directory
-        args: Additional arguments (e.g., '--check', '--verbosity detailed')
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
+        args: Additional arguments (e.g., '--verify-no-changes', '--include-generated')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
     cmd_args = ["format"]
     if args:
         cmd_args.extend(args.split())
-    return _run_dotnet_cmd(workspace, cmd_args)
+    return _run_dotnet_cmd(str(proj_dir), cmd_args)
 
 
 def dotnet_format(workspace: str, args: str = "") -> str:
-    """Alias for dotnet_fmt - run dotnet format."""
+    """Run dotnet format (alias for dotnet_fmt)."""
     return dotnet_fmt(workspace, args)
 
 
-def dotnet_tool_install(tool: str, args: str = "") -> str:
+def dotnet_tool_install(workspace: str, tool: str) -> str:
     """Install a .NET global tool.
 
     Args:
-        tool: Tool name (e.g., 'dotnet-ef', 'dotnet-outdated')
-        args: Additional arguments (e.g., '--version 8.0.0')
+        workspace: Path to project directory
+        tool: Tool package name (e.g., 'dotnet-ef', 'dotnet-outdated-tool')
     """
-    cmd_args = ["tool", "install", "--global"]
-    if args:
-        cmd_args.extend(args.split())
-    cmd_args.append(tool)
-    return _run_dotnet_cmd(".", cmd_args)
+    return _run_dotnet_cmd(workspace, ["tool", "install", "--global", tool])
 
 
 def dotnet_outdated(workspace: str) -> str:
-    """Check for outdated NuGet packages.
+    """Run dotnet-outdated-tool to check for outdated packages (requires dotnet-outdated-tool).
 
     Args:
-        workspace: Path to .NET project directory
+        workspace: Path to .NET project/solution directory (or parent of multi-project solution)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
-    # Try dotnet-outdated tool
-    return _run_dotnet_cmd(workspace, ["tool", "install", "--global", "dotnet-outdated"])
-    # Then run it
-    result = _run_dotnet_cmd(workspace, ["dotnet-outdated"])
-    return result
+    return _run_dotnet_cmd(str(proj_dir), ["outdated"])
 
 
 def dotnet_ef_migrations(workspace: str, args: str = "") -> str:
-    """Run Entity Framework Core migrations.
+    """Run dotnet ef migrations (requires dotnet-ef tool).
 
     Args:
-        workspace: Path to .NET project directory
-        args: Additional arguments (e.g., 'add InitialCreate', 'remove')
+        workspace: Path to .NET project directory (or parent of multi-project solution)
+        args: Additional arguments (e.g., 'add InitialCreate', 'list', 'script')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "*.csproj").exists():
-        csproj_files = list(workspace_path.glob("*.csproj"))
-        if not csproj_files:
-            return f"ERROR: No .csproj found in {workspace}"
+    proj_dir = _find_dotnet_project(workspace)
+    if proj_dir is None:
+        return f"ERROR: No .csproj or .sln found in {workspace} or subdirectories"
     
     cmd_args = ["ef", "migrations"]
     if args:
         cmd_args.extend(args.split())
-    return _run_dotnet_cmd(workspace, cmd_args)
+    return _run_dotnet_cmd(str(proj_dir), cmd_args)
 
 
 def register(reg, max_chars: int = 8000) -> None:

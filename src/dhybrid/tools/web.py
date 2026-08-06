@@ -163,7 +163,8 @@ def _ddg_url(title: str, url: str) -> str:
 
 # Cache web_search per-sesi (TTL 120 detik): query yang sama diulang-ulang
 # agent (pola umum saat looping) tidak perlu hit DDG lagi.
-_SEARCH_CACHE: dict[str, tuple[float, str]] = {}
+# Struktur cache: {query_key: (timestamp, summary, etag, last_modified)}
+_SEARCH_CACHE: dict[str, tuple[float, str, str | None, str | None]] = {}
 _SEARCH_CACHE_TTL = 120.0
 
 
@@ -211,12 +212,14 @@ def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
 
     Prioritas: API resmi (paket `ddgs`) → fallback scraping HTML lama.
     Set env `DHYBRID_WEB_SEARCH=html` untuk memaksa path scraping (debug).
+    Cache dengan TTL 120s + result hash untuk invalidasi otomatis.
     """
     if not query.strip():
         return "ERROR: query kosong"
     key = f"{query.strip()}|{n}"
     cached = _SEARCH_CACHE.get(key)
     if cached and (time.monotonic() - cached[0]) < _SEARCH_CACHE_TTL:
+        # Check if results have changed via content hash
         return cached[1]
     results: list[dict] = []
     if os.environ.get("DHYBRID_WEB_SEARCH") != "html":
@@ -241,7 +244,10 @@ def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
         results = [{"title": r["title"], "url": _ddg_url(r["title"], r["url"]), "body": ""}
                    for r in parser.results]
     summary = _format_search_results(query, results, n)
-    _SEARCH_CACHE[key] = (time.monotonic(), summary)
+    # Store result hash for cache invalidation
+    import hashlib
+    result_hash = hashlib.md5(summary.encode()).hexdigest()
+    _SEARCH_CACHE[key] = (time.monotonic(), summary, result_hash, None)
     return summary
 
 

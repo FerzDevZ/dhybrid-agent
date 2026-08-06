@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import numpy as np
 
@@ -15,6 +16,11 @@ try:
     import faiss
 except ImportError:
     faiss = None
+
+
+# Global model cache to avoid reloading across calls
+_global_model_cache: dict[str, SentenceTransformer] = {}
+_model_cache_lock = threading.Lock()
 
 
 class SemanticSearch:
@@ -36,11 +42,14 @@ class SemanticSearch:
         self._embeddings: np.ndarray | None = None
 
     def _get_model(self) -> SentenceTransformer:
-        """Lazy load the sentence transformer model."""
+        """Lazy load the sentence transformer model (cached globally)."""
         if self._model is None:
-            if SentenceTransformer is None:
-                raise RuntimeError("sentence-transformers not installed. Run: pip install sentence-transformers")
-            self._model = SentenceTransformer(self.model_name)
+            with _model_cache_lock:
+                if self.model_name not in _global_model_cache:
+                    if SentenceTransformer is None:
+                        raise RuntimeError("sentence-transformers not installed. Run: pip install sentence-transformers")
+                    _global_model_cache[self.model_name] = SentenceTransformer(self.model_name)
+                self._model = _global_model_cache[self.model_name]
         return self._model
 
     def _get_index(self, dimension: int) -> faiss.Index:

@@ -6,6 +6,18 @@ import subprocess
 from pathlib import Path
 
 
+def _find_cargo_toml(workspace: str) -> Path | None:
+    """Find Cargo.toml file in workspace or subdirectories (for multi-crate workspaces)."""
+    workspace_path = Path(workspace)
+    # Check root first
+    if (workspace_path / "Cargo.toml").exists():
+        return workspace_path
+    # Search subdirectories for multi-crate workspaces
+    for cargo_toml in workspace_path.rglob("Cargo.toml"):
+        return cargo_toml.parent
+    return None
+
+
 def _run_cargo_cmd(workspace: str, args: list[str], timeout: int = 180) -> str:
     """Run a cargo command in the workspace."""
     try:
@@ -56,129 +68,129 @@ def cargo_test(workspace: str, args: str = "") -> str:
     """Run cargo test in the workspace.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments to pass to 'cargo test' (e.g., '--lib', '--bins', '-- --nocapture')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["test"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_build(workspace: str, args: str = "") -> str:
     """Run cargo build in the workspace.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '--release', '--lib', '--bins')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["build"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_check(workspace: str, args: str = "") -> str:
     """Run cargo check in the workspace (fast type-checking without codegen).
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '--lib', '--bins')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["check"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_fmt(workspace: str, args: str = "") -> str:
     """Run cargo fmt to format Rust source code.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '--check', '--all')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["fmt"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_clippy(workspace: str, args: str = "") -> str:
     """Run cargo clippy for linting.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '-- -D warnings', '--fix')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["clippy"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_audit(workspace: str, args: str = "") -> str:
     """Run cargo audit for security vulnerability scanning.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '--json', '--deny warnings')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
-    return _run_tool_cmd(workspace, "cargo-audit", ["audit"] + (args.split() if args else []))
+    return _run_tool_cmd(str(crate_dir), "cargo-audit", ["audit"] + (args.split() if args else []))
 
 
 def cargo_update(workspace: str, args: str = "") -> str:
     """Run cargo update to update dependencies.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
         args: Additional arguments (e.g., '-p package_name', '--precise version')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
     cmd_args = ["update"]
     if args:
         cmd_args.extend(args.split())
-    return _run_cargo_cmd(workspace, cmd_args)
+    return _run_cargo_cmd(str(crate_dir), cmd_args)
 
 
 def cargo_outdated(workspace: str) -> str:
     """Run cargo outdated to check for outdated dependencies.
 
     Args:
-        workspace: Path to Cargo project directory
+        workspace: Path to Cargo project directory (or parent of multi-crate workspace)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "Cargo.toml").exists():
-        return f"ERROR: No Cargo.toml found in {workspace}"
+    crate_dir = _find_cargo_toml(workspace)
+    if crate_dir is None:
+        return f"ERROR: No Cargo.toml found in {workspace} or subdirectories"
     
-    return _run_tool_cmd(workspace, "cargo-outdated", [])
+    return _run_tool_cmd(str(crate_dir), "cargo-outdated", [])
 
 
 def register(reg, max_chars: int = 8000) -> None:

@@ -6,6 +6,18 @@ import subprocess
 from pathlib import Path
 
 
+def _find_go_mod(workspace: str) -> Path | None:
+    """Find go.mod file in workspace or subdirectories (for multi-module projects)."""
+    workspace_path = Path(workspace)
+    # Check root first
+    if (workspace_path / "go.mod").exists():
+        return workspace_path
+    # Search subdirectories for multi-module projects
+    for go_mod in workspace_path.rglob("go.mod"):
+        return go_mod.parent
+    return None
+
+
 def _run_go_cmd(workspace: str, args: list[str], timeout: int = 120) -> str:
     """Run a go command in the workspace."""
     try:
@@ -55,115 +67,115 @@ def go_test(workspace: str, args: str = "") -> str:
     """Run go test in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments to pass to 'go test' (e.g., '-v', '-race', './...')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["test"]
     if args:
         cmd_args.extend(args.split())
-    return _run_go_cmd(workspace, cmd_args)
+    return _run_go_cmd(str(mod_dir), cmd_args)
 
 
 def go_vet(workspace: str, args: str = "") -> str:
     """Run go vet in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments (e.g., './...')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["vet"]
     if args:
         cmd_args.extend(args.split())
-    return _run_go_cmd(workspace, cmd_args)
+    return _run_go_cmd(str(mod_dir), cmd_args)
 
 
 def go_fmt(workspace: str, args: str = "") -> str:
     """Run go fmt in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments (e.g., './...')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["fmt"]
     if args:
         cmd_args.extend(args.split())
-    return _run_go_cmd(workspace, cmd_args)
+    return _run_go_cmd(str(mod_dir), cmd_args)
 
 
 def go_build(workspace: str, args: str = "") -> str:
     """Run go build in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments (e.g., '-o myapp', './...')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["build"]
     if args:
         cmd_args.extend(args.split())
-    return _run_go_cmd(workspace, cmd_args)
+    return _run_go_cmd(str(mod_dir), cmd_args)
 
 
 def go_mod_tidy(workspace: str) -> str:
     """Run go mod tidy in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
-    return _run_go_cmd(workspace, ["mod", "tidy"])
+    return _run_go_cmd(str(mod_dir), ["mod", "tidy"])
 
 
 def golangci_lint(workspace: str, args: str = "") -> str:
     """Run golangci-lint in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments (e.g., '--fix', './...')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["run"]
     if args:
         cmd_args.extend(args.split())
-    return _run_tool_cmd(workspace, "golangci-lint", cmd_args)
+    return _run_tool_cmd(str(mod_dir), "golangci-lint", cmd_args)
 
 
 def gosec(workspace: str, args: str = "") -> str:
     """Run gosec security scanner in the workspace.
 
     Args:
-        workspace: Path to Go module directory
+        workspace: Path to Go module directory (or parent of multi-module project)
         args: Additional arguments (e.g., './...', '-fmt=json')
     """
-    workspace_path = Path(workspace)
-    if not (workspace_path / "go.mod").exists():
-        return f"ERROR: No go.mod found in {workspace}"
+    mod_dir = _find_go_mod(workspace)
+    if mod_dir is None:
+        return f"ERROR: No go.mod found in {workspace} or subdirectories"
     
     cmd_args = ["-fmt=text"]
     if args:
         cmd_args.extend(args.split())
-    return _run_tool_cmd(workspace, "gosec", cmd_args)
+    return _run_tool_cmd(str(mod_dir), "gosec", cmd_args)
 
 
 def register(reg, max_chars: int = 8000) -> None:

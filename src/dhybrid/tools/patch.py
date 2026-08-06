@@ -71,6 +71,18 @@ def apply_patch(patch_text: str, base_dir: str = ".") -> str:
 
     idx = _find_contiguous(old, old_seq) if old_seq else None
 
+    # VALIDASI KRITIS: pastikan baris yang akan dihapus benar-benar ada di file
+    if idx is not None and removals:
+        # Verifikasi bahwa removals benar-benar cocok di posisi idx + len(contexts)
+        removal_start = idx + len(contexts)
+        for i, removal_line in enumerate(removals):
+            if removal_start + i >= len(old) or old[removal_start + i] != removal_line:
+                return (
+                    f"ERROR: baris yang akan dihapus tidak cocok di {path}:{removal_start + i + 1}. "
+                    f"Diharapkan: '{removal_line}', Ditemukan: '{old[removal_start + i] if removal_start + i < len(old) else 'EOF'}' — "
+                    "baca file dulu (read_file) lalu patch ulang dengan konteks yang benar"
+                )
+
     if idx is None and contexts:
         # fallback: cari hanya blok konteks
         idx = _find_contiguous(old, contexts)

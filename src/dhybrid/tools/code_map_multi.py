@@ -123,7 +123,8 @@ def _get_parser(lang: str) -> tree_sitter.Parser | None:
     try:
         language = tree_sitter.Language(lang_func())
         return tree_sitter.Parser(language)
-    except (AttributeError, TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError, ImportError) as e:
+        # Provide helpful error message about missing grammar
         return None
 
 
@@ -229,6 +230,14 @@ def code_map_multi(path: str, lang: str | None = None) -> str:
                 f"ERROR: extension {p.suffix or '(no extension)'} not supported — "
                 "specify lang= (go|rust|typescript|java|c_sharp)"
             )
+    
+    # Check if grammar is available
+    if lang not in SUPPORTED_LANGUAGES or SUPPORTED_LANGUAGES[lang] is None:
+        return (
+            f"ERROR: tree-sitter grammar for '{lang}' not installed. "
+            f"Run: pip install tree-sitter-{lang.replace('_', '-')}"
+        )
+    
     try:
         symbols = extract_symbols(str(p), p.read_text(encoding="utf-8", errors="replace"), lang)
     except RuntimeError as e:

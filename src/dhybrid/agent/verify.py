@@ -30,6 +30,23 @@ IGNORED_DIRNAMES = {
     "logs",
     ".idea",
     ".vscode",
+    # Additional common dependency/artifact directories
+    "coverage",
+    ".coverage",
+    "htmlcov",
+    ".gradle",
+    ".mvn",
+    "bazel-*",
+    "buck-out",
+    ".cache",
+    ".parcel-cache",
+    ".turbo",
+    "out",
+    "bin",
+    "obj",
+    "pkg",
+    "pkg.mod",
+    "vendor",  # Go vendor (duplicate but safe)
 }
 
 

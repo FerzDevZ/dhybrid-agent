@@ -60,11 +60,15 @@ if [ "$USE_UV" = "1" ]; then
   fi
 fi
 
+# ---- optional: install dev dependencies (default: 1 for full install) ----
+INSTALL_DEV="${DHYBRID_INSTALL_DEV:-1}"
+
 say "Memasang dhybrid-agent (hemat token, hybrid routing)"
 info "repo     : $REPO_URL"
 info "branch   : $BRANCH"
 info "instal di: $INSTALL_DIR"
 [ "$USE_UV" = "1" ] && info "mode     : uv (cepat)"
+[ "$INSTALL_DEV" = "1" ] && info "mode     : full install (dengan dev deps)"
 
 # ---- clone / update ----
 if [ -d "$INSTALL_DIR/.git" ]; then
@@ -86,10 +90,18 @@ python3 -m venv "$INSTALL_DIR/.venv"
 if [ "$USE_UV" = "1" ]; then
   say "Menggunakan uv untuk install dependensi (lebih cepat)..."
   "$INSTALL_DIR/.venv/bin/uv" pip install --quiet --upgrade pip
-  "$INSTALL_DIR/.venv/bin/uv" pip install --quiet -e "$INSTALL_DIR[dev]"
+  if [ "$INSTALL_DEV" = "1" ]; then
+    "$INSTALL_DIR/.venv/bin/uv" pip install --quiet -e "$INSTALL_DIR[dev]"
+  else
+    "$INSTALL_DIR/.venv/bin/uv" pip install --quiet -e "$INSTALL_DIR"
+  fi
 else
   "$INSTALL_DIR/.venv/bin/pip" install --quiet --upgrade pip
-  "$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR[dev]"
+  if [ "$INSTALL_DEV" = "1" ]; then
+    "$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR[dev]"
+  else
+    "$INSTALL_DIR/.venv/bin/pip" install --quiet -e "$INSTALL_DIR"
+  fi
 fi
 
 # ---- binary di PATH ----
