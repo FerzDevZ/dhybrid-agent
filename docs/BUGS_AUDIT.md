@@ -28,7 +28,7 @@
 | FP-01 | `tools/orchestrator.py` | `orchestrator` "tidak terdaftar" saat probe tanpa `client_factory` — graceful non-bug | probe tanpa/ dengan cf | **FALSE-POSITIVE** |
 | FP-02 | `tools/web.py` ×3 | B310 urlopen — semua URL divalidasi http/https (web_fetch/http_request) atau hardcoded https (DDG) | bandit B310 + review guard scheme | **FALSE-POSITIVE** (nosec) |
 | FP-03 | `tools/power_scaffold.py` | B701 jinja `autoescape=False` — template KODE program, bukan HTML user | bandit B701 | **FALSE-POSITIVE** (nosec) |
-| FP-04 | `tools/project_memory.py` | B608 f-string SQL — query parameterized (`?` + `ids`), placeholder dari `len(ids)` | bandit B608 + review | **FALSE-POSITIVE** (nosec) |
+| FP-04 | `tools/project_memory.py` | B608 f-string SQL — query parameterized (`?` + `ids`) | bandit B608 + review | **DIPERBAIKI** — query di-rewrite ke `json_each(?)` (parameterized penuh, tanpa interpolasi string) → B608 tidak relevan, `# nosec` dihapus |
 | OFFPHA-01 | `tools/terminal.py`,`tests.py` | `shell=True` — BY DESIGN (tool terminal/pytest), `# nosec B602` | grep | **FALSE-POSITIVE** |
 | OFFPHA-02 | `session/context.py:74-78` | auto-resume ordering — sudah lookup-dulu-baru-insert (komentar eksplisit) | test `test_auto_resume_loads_last_session_for_cwd` | **BERSIH** |
 | OFFPHA-03 | 5 `*_toolchain.py` + `cli.py` | `PLW1510` subprocess tanpa `check` — semua memeriksa returncode manual; kini ditambah `check=False` eksplisit | ruff | **PERBAIKAN** (chore) |
@@ -68,7 +68,7 @@
 ### SEC-01/SEC-02 (putaran 4)
 - `prometheus_exporter.py`: default host `0.0.0.0` → `127.0.0.1` (metrics tidak lagi terekspos ke semua interface tanpa diminta).
 - `project_memory.py`: `hashlib.md5(..., usedforsecurity=False)`.
-- FP bandit (B310×3, B701, B608) ditandai `# nosec` + alasan; `[tool.bandit]` skips by-design B404/B603/B607/B110/B112/B101 terdokumentasi di `pyproject.toml`.
+- FP bandit (B310×3, B701) ditandai `# nosec` + alasan; B608 project_memory diperbaiki struktural (json_each); `[tool.bandit]` skips by-design B404/B603/B607/B110/B112/B101 terdokumentasi di `pyproject.toml`.
 
 ### LOG-01 (putaran 4)
 - `marketplace.py`: `export_skill`/`import_skill` → `logger.exception`; loop `list_published_skills` → `logger.warning` (skill rusak dilewati, ada jejak) + `name` dipindah keluar `try` (fix possibly-unbound).

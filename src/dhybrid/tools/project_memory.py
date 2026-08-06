@@ -148,11 +148,10 @@ def mem_search(query: str, k: int = 5) -> str:
             dists = {r[0]: r[1] for r in rows}
             hits = []
             if ids:
-                placeholders = ",".join("?" * len(ids))
                 for row in conn.execute(
-                    f"SELECT id, path, start_line, end_line, text FROM chunks "  # nosec B608
-                    f"WHERE id IN ({placeholders})",
-                    ids,
+                    "SELECT id, path, start_line, end_line, text FROM chunks "
+                    "WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))",
+                    (json.dumps(ids),),
                 ).fetchall():
                     hits.append((dists.get(row[0], 9e9), row[1], row[2], row[3], row[4]))
         else:
