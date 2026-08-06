@@ -72,3 +72,42 @@ def toggle_skill(name: str) -> tuple[bool, list[str]]:
     data["skills"] = skills
     p.write_text(yaml.safe_dump(data, sort_keys=False))
     return enabled, disabled
+
+
+def migrate_config() -> dict:
+    """Migrasi config lama ke format baru (idempotent)."""
+    p = user_config_path()
+    if not p.exists():
+        return {}
+    
+    data = load_user_config()
+    changed = False
+    
+    # Ensure all required sections exist
+    if "skills" not in data:
+        data["skills"] = {"disabled": [], "auto_learn": True}
+        changed = True
+    elif "auto_learn" not in data["skills"]:
+        data["skills"]["auto_learn"] = True
+        changed = True
+    
+    if "clarify" not in data:
+        data["clarify"] = {"enabled": True, "max_per_session": 3, "ai": True}
+        changed = True
+    
+    if "budget" not in data:
+        data["budget"] = {"soft": 50000, "hard": 100000}
+        changed = True
+    
+    # Ensure model config has all fields
+    if "model" in data:
+        m = data["model"]
+        if "base_url" not in m:
+            m["base_url"] = ""
+        if "api_key_env" not in m:
+            m["api_key_env"] = ""
+    
+    if changed:
+        p.write_text(yaml.safe_dump(data, sort_keys=False))
+    
+    return data

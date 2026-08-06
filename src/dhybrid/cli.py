@@ -165,6 +165,126 @@ def cmd_self_update(args) -> int:
     return 0
 
 
+def cmd_update(args) -> int:
+    """Alias for self-update with optional auto-yes and config migration."""
+    from dhybrid.session.userconfig import migrate_config
+    from dhybrid.updater import self_update
+    
+    # Auto-yes for non-interactive
+    if getattr(args, 'yes', False):
+        print(self_update())
+        migrate_config()
+        return 0
+    
+    print(self_update())
+    print()
+    print("Menjalankan migrasi config...")
+    migrate_config()
+    return 0
+
+
+def cmd_config_wizard(args) -> int:
+    """Interaktif setup wizard untuk konfigurasi awal."""
+    from pathlib import Path
+
+    from dhybrid.config import Config
+    
+    print("=== dhybrid-agent Config Wizard ===")
+    print()
+    
+    # Load current config
+    cfg = Config.load(None)
+    
+    # 1. Model choice
+    print("1. Pilih model default:")
+    print("   1) bynara-fast      (gratis, stabil, default) - agnes-2.5-flash")
+    print("   2) bynara-medium    (gratis) - stepfun-3.7-flash")
+    print("   3) bynara-big       (gratis) - mistral-large")
+    print("   4) opencode-zen-fast (gratis) - deepseek-v4-flash-free")
+    print("   5) opencode-zen-big  (gratis) - claude-sonnet-5")
+    print("   6) Custom provider:model")
+    print()
+    
+    model_choice = input("Pilih [1-6] (default 1): ").strip() or "1"
+    
+    model_presets = {
+        "1": "bynara-fast",
+        "2": "bynara-medium", 
+        "3": "bynara-big",
+        "4": "opencode-zen-fast",
+        "5": "opencode-zen-big",
+    }
+    
+    if model_choice in model_presets:
+        preset = model_presets[model_choice]
+        cfg.set_model(preset)
+        print(f"   ✓ Model diset ke: {preset}")
+    elif model_choice == "6":
+        custom = input("   Format provider:model (contoh: openai:gpt-4o): ").strip()
+        if ":" in custom:
+            cfg.set_model(custom)
+            print(f"   ✓ Model diset ke: {custom}")
+        else:
+            print("   ✗ Format salah, menggunakan default")
+    else:
+        print("   ✗ Pilihan tidak valid, menggunakan default")
+    
+    print()
+    
+    # 2. Small model (router)
+    print("2. Model kecil untuk routing (hemat token)?")
+    print("   Kosong = nonaktifkan router")
+    small = input("   Preset kecil (contoh: opencode-zen-fast) atau Enter untuk skip: ").strip()
+    if small:
+        cfg.set_small_model(small)
+        print(f"   ✓ Small model: {small}")
+    else:
+        cfg.set_small_model(None)
+        print("   ✓ Router dinonaktifkan")
+    
+    print()
+    
+    # 3. Skills
+    print("3. Auto-learn skills dari sesi nyata?")
+    auto_learn = input("   Aktifkan? (Y/n): ").strip().lower()
+    cfg.skills["auto_learn"] = auto_learn != "n"
+    print(f"   ✓ Auto-learn: {'aktif' if cfg.skills['auto_learn'] else 'nonaktif'}")
+    
+    print()
+    
+    # 4. Clarify
+    print("4. Tanya klarifikasi saat prompt ambigu?")
+    clarify = input("   Aktifkan? (Y/n): ").strip().lower()
+    cfg.clarify["enabled"] = clarify != "n"
+    print(f"   ✓ Clarify: {'aktif' if cfg.clarify['enabled'] else 'nonaktif'}")
+    
+    print()
+    
+    # 5. Budget
+    print("5. Budget token per sesi:")
+    soft = input(f"   Soft limit (default {cfg.budget['soft']:,}): ").strip()
+    if soft.isdigit():
+        cfg.budget["soft"] = int(soft)
+    hard = input(f"   Hard limit (default {cfg.budget['hard']:,}): ").strip()
+    if hard.isdigit():
+        cfg.budget["hard"] = int(hard)
+    print(f"   ✓ Budget: soft={cfg.budget['soft']:,}, hard={cfg.budget['hard']:,}")
+    
+    print()
+    
+    # Save
+    config_path = Path.home() / ".dhybrid" / "config.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    from dhybrid.config import save_config
+    save_config(cfg, config_path)
+    
+    print(f"✓ Config disimpan ke: {config_path}")
+    print()
+    print("Selesai! Jalankan 'dhybrid' untuk memulai.")
+    return 0
+
+
 def cmd_install(args) -> int:
     """Run the installer (reinstall/update)."""
     import os
@@ -223,6 +343,9 @@ def main(argv: list[str] | None = None) -> int:
     doc = sub.add_parser("doctor", help="diagnosa config, key, koneksi, update")
     doc.add_argument("--offline", action="store_true", help="tanpa cek network")
     sub.add_parser("self-update", help="perbarui dhybrid-agent dari GitHub")
+    upd = sub.add_parser("update", help="update + migrasi config (alias self-update + migrate)")
+    upd.add_argument("--yes", action="store_true", help="non-interaktif: jalankan tanpa konfirmasi")
+    sub.add_parser("config-wizard", help="setup interaktif konfigurasi awal")
     inst = sub.add_parser("install", help="jalankan installer (reinstall/update)")
     inst.add_argument("--use-uv", action="store_true", help="gunakan uv untuk install lebih cepat")
     inst.add_argument("--branch", default=None, help="branch git (default: main)")
@@ -251,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
         "skills": cmd_skills,
         "doctor": cmd_doctor,
         "self-update": cmd_self_update,
+        "update": cmd_update,
+        "config-wizard": cmd_config_wizard,
         "install": cmd_install,
     }
     return handlers[args.command](args)
