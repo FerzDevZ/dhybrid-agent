@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dhybrid.dotenv import set_env_key
+from dhybrid.efficiency.budget import TokenBudget
 from dhybrid.session.memory import MemoryStore
 from dhybrid.ui.render import style
 
@@ -440,7 +441,8 @@ def handle_command(cmd: str, ctx) -> bool:
             print(style(f"OK: konteks dikompaksi ({len(cands)} pesan -> ringkasan)", "32"))
     elif name == "/clear":
         ctx.ctx.messages.clear()
-        print("OK: konteks percakapan direset (ringkasan dipertahankan)")
+        ctx.ctx.budget = TokenBudget(ctx.ctx.cfg.budget)
+        print("OK: konteks & budget direset — sesi baru dimulai")
     elif name == "/sessions":
         for s in ctx.store.sessions(limit=15):
             print(f"  {s['id']}  {s['created'][:16]}  {s['title']}")

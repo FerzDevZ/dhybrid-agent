@@ -57,28 +57,57 @@ def needs_change_check(last_assistant_text: str) -> bool:
     
     Harus konsisten dengan COMPLETION_SIGNALS di agent/loop.py agar
     stopped_early + looks_complete = DONE (bukan STUCK).
+    
+    Hanya return True jika model BERTEGAS mengucapkan "tidak ada perubahan"
+    atau frasa ekivalen yang berarti task SELESAI tanpa perlu edit file.
     """
     text = last_assistant_text.upper()
-    return any(
-        phrase in text
-        for phrase in (
-            "TIDAK ADA YANG PERLU DIUBAH",
-            "SUDAH SELESAI",
-            "NO CHANGES NEEDED",
-            "ALL DONE",
-            "NOTHING TO DO",
-            "TIDAK PERLU DIUBAH",
-            "SELESAI",
-            "BERES",
-            "DONE",
-            "COMPLETED",
-            "SUCCESS",
-            "BERFUNGSI",
-            "SIAP DIPAKAI",
-            "BERHASIL",
-            "DIBUAT",
-        )
+    
+    # Frasa eksplisit "tidak perlu ubah" / "no changes needed"
+    explicit_no_changes = (
+        "TIDAK ADA YANG PERLU DIUBAH",
+        "TIDAK PERLU DIUBAH", 
+        "NO CHANGES NEEDED",
+        "NOTHING TO CHANGE",
+        "TIDAK PERLU EDIT",
+        "TIDAK PERLU MODIFIKASI",
     )
+    
+    # Frasa "selesai" yang harus dikualifikasi dengan "tanpa perubahan"
+    # (hindari false positive: "selesai, saya ubah file" ≠ selesai natural)
+    qualified_completion = (
+        "SUDAH SELESAI. TIDAK ADA",
+        "SELESAI. TIDAK PERLU",
+        "ALL DONE. NO CHANGES",
+        "COMPLETED. NO CHANGES",
+        "BERES. TIDAK ADA",
+    )
+    
+    # Cek frasa eksplisit dulu
+    if any(phrase in text for phrase in explicit_no_changes):
+        return True
+    
+    # Cek frasa qualified completion
+    if any(phrase in text for phrase in qualified_completion):
+        return True
+    
+    # Frasa pendek yang BERARTI "sudah benar/berfungsi tanpa perlu ubah lagi"
+    # Hanya cocokkan jika teks CUKUP PENDEK (bukan kalimat panjang yang kebetulan mengandung kata)
+    # HINDARI: "selesai", "berhasil", "dibuat" karena sering muncul di "selesai, saya buat file" 
+    # yang berarti ADA perubahan, bukan tidak ada perubahan.
+    short_signals = (
+        "SUDAH BENAR",
+        "SUDAH BERFUNGSI",
+        "SUDAH SIAP",
+        "SUDAH ADA",
+        "IT WORKS",
+        "WORKING FINE",
+        "NO CHANGES",
+        "NO CHANGE",
+    )
+    
+    # Hanya cocokkan jika teks pendek (< 50 char) untuk hindari false positive
+    return len(text) < 50 and any(phrase in text for phrase in short_signals)
 
 
 def summarize_diff_stat(stat_output: str) -> str:

@@ -24,6 +24,10 @@ FSTART = "<function"
 FEND = "</function>"
 INV_END = "</invoke>"
 TOOL_RE = re.compile(T + r"tool\n(.*?)\n" + T + "", re.DOTALL)
+TOOLCALL_SINGLE_RE = re.compile(
+    r"<tool_call>\s*<tool_name>(.*?)</tool_name>\s*<parameters>(.*?)</parameters>\s*</tool_call>",
+    re.DOTALL,
+)
 INVOKE_RE = re.compile(r'<invoke\s+name="([\w_-]+)"\s*>(.*?)' + INV_END, re.DOTALL)
 TOOLCALLS_RE = re.compile(r"<tool_calls>.*?</tool_calls>", re.DOTALL)
 FUNC_TAG_RE = re.compile(FSTART + r"\s*=\s*([\w_-]+)>(.*?)" + FEND, re.DOTALL)
@@ -218,7 +222,23 @@ def parse_tool_calls(text: str) -> list[dict]:
         calls.append({"id": f"inv{j}", "name": name, "arguments": args})
     calls.extend(parse_bare_json_calls(text))
     calls.extend(_parse_function_tag_calls(text))
+    calls.extend(_parse_toolcall_single(text))
     return dedupe_tool_calls(calls)
+
+
+def _parse_toolcall_single(text: str) -> list[dict]:
+    """Format: <tool_call><tool_name>X</tool_name><parameters>{JSON}</parameters></tool_call>"""
+    calls: list[dict] = []
+    for i, m in enumerate(TOOLCALL_SINGLE_RE.finditer(text)):
+        name = m.group(1).strip()
+        raw = m.group(2).strip()
+        try:
+            args = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            args = {"command": raw} if raw else {}
+        if isinstance(args, dict) and name:
+            calls.append({"id": f"tc{i}", "name": name, "arguments": args})
+    return calls
 
 
 def dedupe_tool_calls(calls: list[dict]) -> list[dict]:
@@ -236,11 +256,12 @@ def dedupe_tool_calls(calls: list[dict]) -> list[dict]:
 def strip_tool_block(text: str) -> str:
     """Bersihkan semua markup panggilan tool agar teks final bersih/prosa."""
     text = TOOL_RE.sub("", text)
+    text = TOOLCALL_SINGLE_RE.sub("", text)
     text = INVOKE_RE.sub("", text)
     text = TOOLCALLS_RE.sub("", text)
     text = FUNC_TAG_RE.sub("", text)
     text = re.sub(
-        r"<\s*/?\s*(?:tool_call|tool_calls|invoke|function|analysis|anteThinking|parameter)\b[^>]*>",
+        r"<\s*/?\s*(?:tool_call|tool_calls|tool_name|invoke|function|analysis|anteThinking|parameters?|parameters)\b[^>]*>",
         "",
         text,
         flags=re.IGNORECASE,

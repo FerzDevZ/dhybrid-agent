@@ -17,6 +17,7 @@ from collections.abc import Callable
 # (start_marker, end_marker)
 BLOCK_PAIRS: list[tuple[str, str]] = [
     ("<tool_calls>", "</tool_calls>"),
+    ("<tool_call>", "</tool_call>"),
     ("```tool", "```"),
     ("<invoke name=", "</invoke>"),
     ('{"name": "', "\n"),  # JSON telanjang satu-baris: {"name": "x", ...}

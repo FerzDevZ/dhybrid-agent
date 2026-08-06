@@ -13,7 +13,7 @@ model:
 
 budget:
   soft: 60000              # trigger compaction
-  hard: 120000             # force stop/compact
+  hard: 500000             # 500K — realistis untuk task coding kompleks
 
 context:
   keep_recent: 8           # pesan terakhir yang dipertahankan verbatim
