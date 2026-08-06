@@ -152,10 +152,11 @@ if [ -f "$HOME/.zshrc" ] && ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev
 fi
 
 # ---- interaktif: tawarkan menjalankan dhybrid langsung ----
-if [ -t 0 ] && [ -t 1 ]; then
-  printf '\n%s=== Instalasi selesai! ===%s\n' "$C_BOLD" "$C_OFF"
-  printf 'Mau coba dhybrid sekarang? (Y/n) '
-  read -r REPLY
+# Baca dari /dev/tty agar tetap interaktif saat dipipe dari curl
+if [ -t 1 ] && [ -e /dev/tty ]; then
+  printf '\n%s=== Instalasi selesai! ===%s\n' "$C_BOLD" "$C_OFF" >/dev/tty
+  printf 'Mau coba dhybrid sekarang? (Y/n) ' >/dev/tty
+  read -r REPLY </dev/tty
   if [[ -z "$REPLY" || "$REPLY" =~ ^[Yy]$ ]]; then
     say "Menjalankan dhybrid repl..."
     exec "$BIN_DIR/dhybrid" repl
@@ -165,7 +166,7 @@ if [ -t 0 ] && [ -t 1 ]; then
     info "atau buka terminal baru, lalu: dhybrid repl"
   fi
 else
-  # non-interaktif (pipe)
+  # non-interaktif (pipe, CI, dll)
   say "${C_BOLD}Selesai!${C_OFF}"
   info "jalankan sekarang : $BIN_DIR/dhybrid repl"
   info "atau buka terminal baru, lalu: dhybrid repl"
