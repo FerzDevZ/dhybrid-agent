@@ -11,6 +11,7 @@
 #   DHYBRID_BIN_DIR     direktori symlink binary (default: ~/.local/bin)
 #   DHYBRID_SKIP_ENV    1 = jangan buat .env dari .env.example
 #   DHYBRID_USE_UV      1 = gunakan uv untuk instalasi (lebih cepat)
+#   DHYBRID_INSTALL_DEV 1 = install dev deps (default: 1)
 #
 # Aman dipakai via pipe (non-interaktif, tidak ada prompt).
 
@@ -150,13 +151,31 @@ if [ -f "$HOME/.zshrc" ] && ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev
   info "completion zsh ditambahkan ke ~/.zshrc"
 fi
 
-# ---- selesai ----
-say "${C_BOLD}Selesai!${C_OFF}"
-info "jalankan sekarang : $BIN_DIR/dhybrid repl"
-info "atau buka terminal baru, lalu: dhybrid repl"
+# ---- interaktif: tawarkan menjalankan dhybrid langsung ----
+if [ -t 0 ] && [ -t 1 ]; then
+  printf '\n%s=== Instalasi selesai! ===%s\n' "$C_BOLD" "$C_OFF"
+  printf 'Mau coba dhybrid sekarang? (Y/n) '
+  read -r REPLY
+  if [[ -z "$REPLY" || "$REPLY" =~ ^[Yy]$ ]]; then
+    say "Menjalankan dhybrid repl..."
+    exec "$BIN_DIR/dhybrid" repl
+  else
+    say "${C_BOLD}Selesai!${C_OFF}"
+    info "jalankan nanti: $BIN_DIR/dhybrid repl"
+    info "atau buka terminal baru, lalu: dhybrid repl"
+  fi
+else
+  # non-interaktif (pipe)
+  say "${C_BOLD}Selesai!${C_OFF}"
+  info "jalankan sekarang : $BIN_DIR/dhybrid repl"
+  info "atau buka terminal baru, lalu: dhybrid repl"
+fi
+
 if [ -f "$INSTALL_DIR/.env" ] && ! grep -q "=" "$INSTALL_DIR/.env"; then
   warn "JANGAN LUPA: isi API key di $INSTALL_DIR/.env"
 fi
 
-# ---- tampilkan versi ----
-"$BIN_DIR/dhybrid" --version 2>/dev/null || true
+# ---- tampilkan versi (non-interaktif) ----
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+  "$BIN_DIR/dhybrid" --version 2>/dev/null || true
+fi
