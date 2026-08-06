@@ -54,7 +54,18 @@ def build_system_prompt(base: str, workspace_hint: str = "") -> str:
 
 def needs_change_check(last_assistant_text: str) -> bool:
     """Deteksi sinyal 'tidak ada yang perlu diubah' untuk early-stop."""
-    return "TIDAK ADA YANG PERLU DIUBAH" in last_assistant_text.upper()
+    text = last_assistant_text.upper()
+    return any(
+        phrase in text
+        for phrase in (
+            "TIDAK ADA YANG PERLU DIUBAH",
+            "SUDAH SELESAI",
+            "NO CHANGES NEEDED",
+            "ALL DONE",
+            "NOTHING TO DO",
+            "TIDAK PERLU DIUBAH",
+        )
+    )
 
 
 def summarize_diff_stat(stat_output: str) -> str:
