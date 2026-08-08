@@ -34,7 +34,7 @@ def _escalation_confirm(ctx):
         if policy != "ask":
             return policy == "auto"
         try:
-            ans = input(
+            ans = rich_ui.prompt_input(
                 f"⚠ Model ingin ESKALASI ke model yang lebih kuat ({reason})\n"
                 "Izinkan? (y/N) "
             )
@@ -171,17 +171,32 @@ def show_welcome(ctx) -> None:
         print(style(notice, "33"))
 
 
-def _toggle_mode(ctx) -> None:
-    """Plan ⇄ Build — sinkronkan gerbang tool + terminal."""
-    new_mode = PLAN if getattr(ctx, "mode", BUILD) != PLAN else BUILD
-    apply_mode(ctx, new_mode)
-    label = MODE_LABEL[new_mode]
-    hint = (
-        "hanya observasi — tool mutasi & perintah berbahaya diblokir"
-        if new_mode == PLAN
-        else "eksekusi penuh + Issue/PR"
-    )
-    print(style(f"\n[Mode: {label}] {hint}", "33" if new_mode == PLAN else "32"))
+def _is_answer_only(raw: str) -> bool:
+    """True bila input adalah jawaban konfirmasi murni (y/n/ya/tidak/ok/dst)
+    tanpa teks task lain — bukan prompt yang layak jadi task agent."""
+    return raw.strip().lower() in ANSWER_ONLY_WORDS
+
+
+def _run_one_guard(raw: str) -> bool:
+    """Guard prompt utama: jawaban konfirmasi murni (sisa jawaban pertanyaan
+    lama yang sudah selesai) TIDAK boleh jadi task baru. Return True bila raw
+    layak diteruskan ke _run_one, False bila harus di-skip + pesan."""
+
+    if _is_answer_only(raw):
+        print(
+            style(
+                "Tidak ada pertanyaan yang sedang menunggu jawaban. "
+                "Ketik task/perintah baru untuk mulai bekerja, atau /help.",
+                "90",
+            )
+        )
+        return False
+    return True
+
+
+# debounce toggle mode (module-level) — Tab berulang cepat tidak boleh
+# men-trigger berkali-kali dalam satu burst (membuat UI berkedip/memburuk).
+_LAST_TOGGLE_AT = 0.0
 
 
 # daftar kata untuk autocomplete: semua slash-command + nama skill
@@ -258,6 +273,16 @@ def _repl_plain_prompt(ctx) -> str:
     return input(style(f"[{MODE_LABEL[mode]}] dhybrid> ", color)).strip()
 
 
+# Jawaban konfirmasi yang ketik di REPL (mis. user masih menanggapi pertanyaan
+# "Izinkan?" dari task sebelumnya yang sudah selesai) BUKAN task baru — jangan
+# sampai memicu agent run yang bikin kerja-kerja tak jelas.
+ANSWER_ONLY_WORDS = {
+    "y", "ya", "yes", "yess", "ye", "iyah", "iya", "mengerti", "paham",
+    "n", "no", "tidak", "ga", "gak", "ngga", "nggak", "ndak", "skip",
+    "ok", "oke", "okay", "sip", "mantap", "setuju", "batal", "stop",
+}
+
+
 def repl_loop(ctx) -> int:
     from dhybrid.tools import terminal
 
@@ -268,7 +293,7 @@ def repl_loop(ctx) -> int:
 
         def _confirm(command: str) -> bool:
             try:
-                return input(f"⚠ perintah berbahaya terdeteksi:\n  {command}\nJalankan? (y/N) ").strip().lower() in ("y", "yes")
+                return rich_ui.prompt_input(f"⚠ perintah berbahaya terdeteksi:\n  {command}\nJalankan? (y/N) ").strip().lower() in ("y", "yes")
             except (EOFError, KeyboardInterrupt):
                 return False
 
@@ -309,8 +334,16 @@ def repl_loop(ctx) -> int:
             def _on_tab(event) -> None:
                 buf = event.current_buffer
                 if not buf.text.strip():
-                    # buffer kosong: Tab ⇄ Plan/Build mode
-                    _toggle_mode(ctx)
+                    # buffer kosong: Tab ⇄ Plan/Build mode (debounce ~300ms —
+                    # Tab berulang cepat tidak memicu gelombang mode flip)
+                    global _LAST_TOGGLE_AT
+                    import time as _t
+
+                    now = _t.monotonic()
+                    if now - _LAST_TOGGLE_AT < 0.3:
+                        return
+                    _LAST_TOGGLE_AT = now
+                    apply_mode(ctx, PLAN if getattr(ctx, "mode", BUILD) != PLAN else BUILD)
                     event.app.invalidate()
                 else:
                     # sedang mengetik → Tab tetap untuk autocomplete
@@ -346,6 +379,12 @@ def repl_loop(ctx) -> int:
             if raw.startswith("/"):
                 if handle_command(raw, ctx):
                     return 0
+                continue
+            # Jawaban konfirmasi murni (y/n/ya/tidak/dst) yang terketik di prompt
+            # utama — biasanya sisa jawaban pertanyaan "Izinkan? (y/N)" dari task
+            # sebelumnya. Bukan task: JANGAN meluncurkan agent (hemat token, hindari
+            # agent mengarang-ngarang pekerjaan dari satu huruf "y").
+            if not _run_one_guard(raw):
                 continue
             if not ctx.sid:
                 ctx.sid = ctx.store.new_session()
@@ -433,7 +472,7 @@ def _run_one(ctx, raw: str) -> None:
                 )
             )
             try:
-                answer = input("> ").strip()
+                answer = rich_ui.prompt_input("> ").strip()
             except (EOFError, KeyboardInterrupt):
                 answer = ""
             low = answer.lower()

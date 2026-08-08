@@ -53,20 +53,44 @@ def render_progress(label: str = "memproses..."):
     Pakai:
         with render_progress("menyelesaikan task"):
             ... lama ...
-    """
+
+    Prompt interaktif di tengah run harus memakai `prompt_input()` — fungsi
+    ini men-pause spinner sebelum input() agar thread refresh rich Live tidak
+    menimpa prompt/ketikan user (bug: user tak bisa mengetik jawaban)."""
     if _NO_COLOR or not _console().is_terminal:
         from contextlib import nullcontext
+
         return nullcontext()
     try:
-
         return _ProgressCtx(label)
     except Exception:  # noqa: BLE001 — rich tak tersedia
         from contextlib import nullcontext
+
         return nullcontext()
 
 
+# spinner aktif saat ini (singleton) — dipakai pause/resume di prompt_input.
+_ACTIVE: _ProgressCtx | None = None
+
+
+def prompt_input(prompt: str = "") -> str:
+    """input() dengan spinner dimatikan dulu & dihidupkan lagi setelahnya.
+
+    Hindari race: thread refresh rich Live menimpa prompt/ketikan saat
+    user menjawab pertanyaan konfirmasi/escalation di tengah task."""
+    active = _ACTIVE
+    if active is not None:
+        active.pause()
+    try:
+        return input(prompt)
+    finally:
+        if active is not None:
+            active.resume()
+
+
 class _ProgressCtx:
-    """Wrapper context manager agar Progress.start()/.stop() otomatis."""
+    """Wrapper context manager agar Progress.start()/.stop() otomatis,
+    plus pause/resume untuk prompt interaktif."""
 
     def __init__(self, label: str):
         from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -79,14 +103,36 @@ class _ProgressCtx:
         )
         self._task = None
         self._label = label
+        self._paused = False
 
     def __enter__(self):
+        global _ACTIVE
+        _ACTIVE = self
         self._task = self._p.add_task(self._label, total=None)
         self._p.start()
         return self
 
+    def pause(self) -> None:
+        if not self._paused:
+            self._p.stop()
+            self._paused = True
+
+    def resume(self) -> None:
+        if self._paused:
+            try:
+                self._p.start()
+            except Exception:  # noqa: BLE001, S110 — restart Live bisa gagal; lanjut tanpa spinner
+                pass
+            self._paused = False
+
     def __exit__(self, *exc):
-        self._p.stop()
+        global _ACTIVE
+        _ACTIVE = None
+        if self._paused:
+            # prompt masih terbuka saat keluar — pokoknya hentikan Live.
+            self._paused = False
+        else:
+            self._p.stop()
         return False
 
 

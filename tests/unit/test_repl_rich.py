@@ -37,3 +37,23 @@ def test_render_progress_available():
     assert callable(rich_ui.render_progress)
     with rich_ui.render_progress("test"):
         pass
+
+
+def test_answer_only_guard_does_not_run_task(capsys):
+    """Input "y" / "ya" / "tidak" di prompt utama BUKAN task baru.
+
+    Regression untuk bug: user mengetik "y" (menjawab pertanyaan konfirmasi
+    lama seperti "Izinkan? (y/N)" yang sudah selesai), tapi REPL malah
+    menjalankannya sebagai task — agent meluncur & menyia-nyiakan token.
+    """
+    for raw in ("y", "ya", "tidak", "n", "ok"):
+        assert repl._run_one_guard(raw) is False  # di-block, bukan task
+    out = capsys.readouterr().out
+    assert "Tidak ada pertanyaan" in out
+
+
+def test_answer_only_guard_runs_real_task():
+    """Input task normal tetap diteruskan ke _run_one (bukan di-block)."""
+    assert repl._is_answer_only("y") is True
+    assert repl._is_answer_only(" buat web login ") is False
+    assert repl._is_answer_only("lanjutkan") is False
