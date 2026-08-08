@@ -235,7 +235,10 @@ def _status_line(ctx) -> str:
         f"[{label}] {fmt_tokens(used)}/{fmt_tokens(soft)}{pct} · ${cost:.2f}"
         f" · step {steps} · {model}{rt}"
     )
-    right = "Tab=mode · Ctrl+P=perintah · Ctrl+R=riwayat · Ctrl+D=quit"
+    right = (
+        f"[{label}] Tab=mode · Ctrl+P=perintah · "
+        "Ctrl+R=riwayat · Ctrl+D=quit"
+    )
     try:
         import shutil
 
@@ -416,10 +419,16 @@ def _run_one(ctx, raw: str) -> None:
     # Reset buffer streaming output di non-TTY (cegah pecah karakter per baris)
     from dhybrid.ui.render import flush_stream
     flush_stream()  # aman di semua mode — no-op jika buffer kosong
-    # judul sesi dari prompt pertama
-    if ctx.store.get_session(ctx.sid) and not ctx.store.get_session(ctx.sid)["title"].startswith("untitled"):
+    session_info = ctx.store.get_session(ctx.sid) if getattr(ctx, "sid", None) else None
+    # judul sesi dari prompt pertama — pakai .get() defensive biar tak
+    # crash bila session row tak ada (sid kosong/invalid): buat baru otomatis.
+    if session_info and not session_info.get("title", "").startswith("untitled"):
         pass
     else:
+        # row hilang meski sid ada (desync store / /clear parial) → buat baru
+        if not session_info:
+            ctx.sid = ctx.store.new_session(cwd=ctx.cwd)
+            session_info = ctx.store.get_session(ctx.sid)
         ctx.store.conn.execute(
             "UPDATE sessions SET title=? WHERE id=?",
             (raw[:60], ctx.sid),
