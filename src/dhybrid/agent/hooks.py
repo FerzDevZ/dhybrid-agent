@@ -16,6 +16,9 @@ class Hooks:
     on_tool: Callable[[str, dict, str], None] | None = None
     on_compaction: Callable[[str], None] | None = None
     on_finish: Callable[[Any], None] | None = None
+    on_nudge: Callable[[str, str], None] | None = None       # (nudge_type, message)
+    on_escalation: Callable[[str, str], None] | None = None  # (preset_name, reason)
+    on_state_transition: Callable[[str, str, str], None] | None = None  # (from, to, reason)
 
     def delta(self, text: str) -> None:
         if self.on_delta:
@@ -36,3 +39,15 @@ class Hooks:
     def finish(self, result) -> None:
         if self.on_finish:
             self.on_finish(result)
+
+    def nudge(self, nudge_type: str, message: str) -> None:
+        if self.on_nudge:
+            self.on_nudge(nudge_type, message)
+
+    def escalation(self, preset_name: str, reason: str) -> None:
+        if self.on_escalation:
+            self.on_escalation(preset_name, reason)
+
+    def state_transition(self, from_state: str, to_state: str, reason: str) -> None:
+        if self.on_state_transition:
+            self.on_state_transition(from_state, to_state, reason)

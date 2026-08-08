@@ -453,6 +453,50 @@ def test_loop_retries_transient_429():
     assert res.final_text == "Selesai ok."
 
 
+def test_loop_reflection_phase_for_weak_final():
+    """Fase Reflect: jawaban buntu (build tanpa bukti, bukan QA/janji-selesai)
+    setelah nudge habis → memicu [refleksi] & tercatat di reflect_iterations."""
+    client = ScriptedClient([
+        "text:saya tidak bisa membantu di sini",
+        "text:saya tidak bisa membantu di sini",
+    ])
+    loop = AgentLoop(
+        client,
+        _tools(),
+        ContextManager(),
+        TokenBudget(soft=10 ** 9, hard=10 ** 9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(max_nudges=1),
+    )
+    res = loop.run("buatkan aplikasi", "sys")
+    assert res.reflect_iterations >= 1, "jawaban buntu harus memicu fase refleksi"
+    assert any(
+        (m.content or "").lstrip().startswith("[refleksi")
+        for m in (client.last_messages or [])
+        if m.role == "user"
+    )
+    assert res.final_text  # hasil final tetap tersedia setelah refleksi
+
+
+def test_loop_reflection_phase_skipped_for_done_with_evidence():
+    """Build dengan bukti + klaim selesai TIDAK di-refleksi ulang (sudah bagus),
+    dan tidak menambah turn ekstra di luar budget nudge."""
+    reg = ToolRegistry()
+    reg.register("write_file", "tulis", {"path": {"type": "string"}}, lambda **kw: "ok")
+    client = ScriptedClient(["tool:write_file:x", "text:selesai, file dibuat"])
+    loop = AgentLoop(
+        client,
+        reg,
+        ContextManager(),
+        TokenBudget(soft=10 ** 9, hard=10 ** 9),
+        cwd=EMPTY_CWD,
+        cfg=LoopConfig(max_nudges=2),
+    )
+    res = loop.run("buatkan file config", "sys")
+    assert res.reflect_iterations == 0, "klaim selesai + bukti tidak butuh refleksi"
+    assert res.final_text == "selesai"
+
+
 def test_loop_intent_text_nudged_not_final():
     """'Saya akan cek dan start server:' (niat tanpa tool di pesan itu) TIDAK boleh
     langsung DONE — di-nudge untuk eksekusi, lalu selesai normal di turn berikutnya."""

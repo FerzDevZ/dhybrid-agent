@@ -123,12 +123,12 @@ def browser(action: str = "navigate", url: str = "", selector: str = "", text: s
 def register(reg) -> None:
     reg.register(
         "browser",
-        browser,
+        "Browser headless (Playwright): navigate/click/type/snapshot untuk verifikasi web E2E.",
         {
             "action": {"type": "string", "required": True},
             "url": {"type": "string"},
             "selector": {"type": "string"},
             "text": {"type": "string"},
         },
-        "Browser headless (Playwright): navigate/click/type/snapshot untuk verifikasi web E2E.",
+        browser,
     )

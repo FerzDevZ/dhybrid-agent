@@ -12,10 +12,16 @@ COMPACT_PROMPT = (
 )
 
 
-def compact_conversation(client: LLMClient, messages: list[ChatMessage]) -> str:
-    resp = client.complete(
-        [ChatMessage(role="system", content=COMPACT_PROMPT)] + messages,
-        max_tokens=250,
-        temperature=0.0,
-    )
-    return resp.message.content.strip()
+def compact_conversation(client: LLMClient, messages: list[ChatMessage]) -> str | None:
+    """Ringkas percakapan. None bila provider error (tidak crash — konteks utuh)."""
+    for attempt in (1, 2):
+        try:
+            resp = client.complete(
+                [ChatMessage(role="system", content=COMPACT_PROMPT)] + messages,
+                max_tokens=250,
+                temperature=0.0,
+            )
+            return resp.message.content.strip()
+        except Exception:  # noqa: BLE001 — apapun error provider (502/limit dll), jangan crash
+            if attempt == 2:
+                return None

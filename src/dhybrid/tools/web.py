@@ -11,7 +11,15 @@ import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 
+from dhybrid.security.guard import check_egress
+
 TEXT_TAGS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "pre", "code", "td", "th", "blockquote"}
+
+
+def _egress_allow() -> list[str]:
+    """Allowlist host egress dari env DHYBRID_EGRESS_ALLOW (koma). Kosong = izinkan semua."""
+    raw = os.environ.get("DHYBRID_EGRESS_ALLOW", "")
+    return [h.strip() for h in raw.split(",") if h.strip()]
 
 
 class _TextExtractor(HTMLParser):
@@ -69,6 +77,9 @@ def web_fetch(url: str, max_chars: int = 6000, timeout: int = 15) -> str:
     """
     if not url.startswith(("http://", "https://")):
         return f"ERROR: URL harus http/https: {url}"
+    blocked = check_egress(url, _egress_allow())
+    if blocked:
+        return blocked
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "dhybrid-agent/0.3"})
         with urllib.request.urlopen(req, timeout=timeout) as r:  # nosec B310
@@ -246,7 +257,7 @@ def web_search(query: str, n: int = 5, timeout: int = 15) -> str:
     summary = _format_search_results(query, results, n)
     # Store result hash for cache invalidation
     import hashlib
-    result_hash = hashlib.md5(summary.encode()).hexdigest()
+    result_hash = hashlib.md5(summary.encode(), usedforsecurity=False).hexdigest()
     _SEARCH_CACHE[key] = (time.monotonic(), summary, result_hash, None)
     return summary
 
@@ -262,6 +273,9 @@ def http_request(
     """Fire HTTP request (utk API CALL tool). Redak Authorization, retry 429 backoff."""
     if not url.startswith(("http://", "https://")):
         return f"ERROR: URL harus http/https: {url}"
+    blocked = check_egress(url, _egress_allow())
+    if blocked:
+        return blocked
     method_u = method.upper()
     if method_u not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
         return f"ERROR: method tidak didukung: {method}"

@@ -1,0 +1,28 @@
+# Dhybrid Agent — deployment sederhana (single service).
+# Per project: workspace di-mount read-write; audit/checkpoint dipersist.
+# Provider key + egress policy via environment (JANGAN commit rahasia).
+services:
+  dhybrid:
+    build: .
+    image: dhybrid-agent:latest
+    env_file:
+      - .env.dhybrid
+    environment:
+      # --- provider (contoh; isi di .env.dhybrid) ---
+      # DHYBRID_PROVIDER: openai|anthropic|...
+      # LLM_API_KEY: ...
+      # --- egress: host yang diizinkan untuk web_fetch/http_request ---
+      # DHYBRID_EGRESS_ALLOW: "example.com,api.github.com"
+      # --- observability / audit ---
+      DHYBRID_AUDIT_DIR: /data/audit
+      DHYBRID_CHECKPOINT_DIR: /data/checkpoints
+      DHYBRID_WORKSPACE: /workspace
+    volumes:
+      - ./workspace:/workspace
+      - dhybrid_data:/data
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  dhybrid_data:

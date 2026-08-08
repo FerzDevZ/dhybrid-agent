@@ -21,6 +21,7 @@ def build_tools(
     max_chars = cfg.tool.get("max_output_chars", 8000)
     from dhybrid.tools import (
         ask,
+        background,
         browser_tool,
         ci_cd,
         clarify,
@@ -39,6 +40,7 @@ def build_tools(
         orchestrator,
         patch,
         project_memory,
+        repo,
         rust_toolchain,
         search,
         semantic_search,
@@ -52,8 +54,9 @@ def build_tools(
         web,
     )
 
-    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, ci_cd, go_toolchain, rust_toolchain, ts_toolchain, java_toolchain, dotnet_toolchain, project_memory, soft):
+    for mod in (terminal, files, patch, search, git, tests, todo, web, documents, code_map, code_map_multi, dep_graph, semantic_search, codegen_tool, ci_cd, go_toolchain, rust_toolchain, ts_toolchain, java_toolchain, dotnet_toolchain, project_memory, soft, repo):
         mod.register(reg, max_chars=max_chars)
+    background.register(reg, max_chars=max_chars)
     orchestrator.register(reg, max_chars=max_chars, client_factory=client_factory)
     browser_tool.register(reg)
     vision.register(reg)

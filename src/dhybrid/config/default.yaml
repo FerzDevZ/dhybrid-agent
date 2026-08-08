@@ -1,0 +1,205 @@
+workspace: ~/.dhybrid
+
+model:
+  # SATU model — dipilih user kapan saja: /settings atau dhybrid --model <preset>.
+  # Default: bynara-fast (gratis, tanpa API key butuh, lebih stabil)
+  provider: openai
+  model: agnes-2.5-flash
+  base_url: https://router.bynara.id/v1
+  api_key_env: BYNARA_API_KEY
+  max_tokens: 4096
+  temperature: 0.2
+  chain: ["bynara-big", "openrouter-big", "anthropic-big"]  # escalation quality chain
+
+budget:
+  soft: 60000              # trigger compaction
+  hard: 500000             # 500K — realistis untuk task coding kompleks
+
+context:
+  keep_recent: 8           # pesan terakhir yang dipertahankan verbatim
+  compact_ratio: 0.5
+
+tool:
+  max_output_chars: 8000
+  allowlist: [terminal, read_file, write_file, apply_patch, grep, find_files, git_status, git_diff, git_commit, git_log, run_tests, tdd_status, todo_add, todo_list, todo_done, todo_clear, memory_set, memory_get, memory_search, subagent, web_fetch, web_search, http_request, ask_user, read_document, code_map, code_map_multi, dep_graph, semantic_search, codegen_openapi, codegen_graphql, codegen_protobuf, ci_cd, go_test, go_vet, go_fmt, go_build, go_mod_tidy, golangci_lint, gosec, cargo_test, cargo_build, cargo_check, cargo_fmt, cargo_clippy, cargo_audit, cargo_update, cargo_outdated, npm_test, npm_build, npm_install, npm_audit, tsc_check, eslint_check, jest_test, vitest_test, prettier_fmt, mvn_test, mvn_build, mvn_compile, mvn_package, mvn_clean, gradle_test, gradle_build, gradle_check, spotbugs_check, checkstyle_check, dotnet_test, dotnet_build, dotnet_restore, dotnet_clean, dotnet_fmt, dotnet_format, dotnet_tool_install, dotnet_outdated, dotnet_ef_migrations, orchestrator, mem_index, mem_search, mem_reset, episodic_remember, episodic_recall, episodic_recent, episodic_forget, browser, read_image, clarify, sys_info, scaffold, data_query, pdf_ops, xlsx_edit, run_bg, poll_bg, repo_issues, repo_issue, repo_pr]
+  # mcp_servers: daftar MCP server eksternal (stdio). Contoh:
+  #   mcp_servers:
+  #     - {name: fs, command: npx, args: ["-y", "@modelcontextprotocol/server-filesystem", "/path"]}
+  mcp_servers: []
+
+presets:
+  openai-fast:
+    provider: openai
+    model: gpt-4o-mini
+    api_key_env: OPENAI_API_KEY
+    cost_per_1k_input: 0.15
+    cost_per_1k_output: 0.60
+  openai-big:
+    provider: openai
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    cost_per_1k_input: 2.5
+    cost_per_1k_output: 10.0
+  anthropic-fast:
+    provider: anthropic
+    model: claude-3-5-haiku-latest
+    api_key_env: ANTHROPIC_API_KEY
+    cost_per_1k_input: 1.0
+    cost_per_1k_output: 5.0
+  anthropic-big:
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+    cost_per_1k_input: 3.0
+    cost_per_1k_output: 15.0
+  openrouter-fast:
+    provider: openai
+    model: deepseek/deepseek-chat
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    cost_per_1k_input: 0.27
+    cost_per_1k_output: 1.1
+  openrouter-big:
+    provider: openai
+    model: anthropic/claude-sonnet-5
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    cost_per_1k_input: 3.0
+    cost_per_1k_output: 15.0
+  # Model 2.5 generasi lama (gemini-2.5-flash / 2.5-pro) sudah tidak tersedia
+  # untuk user baru (404 "no longer available") / kena quota 429 pada tier gratis.
+  # Yang terverifikasi jalan: gemini-flash-latest (alias stabil) & gemini-3.x-flash.
+  # Model Pro butuh tier berbayar.
+  gemini-fast:
+    provider: openai
+    model: gemini-flash-latest
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key_env: GEMINI_API_KEY
+    cost_per_1k_input: 0.1
+    cost_per_1k_output: 0.4
+  gemini-big:
+    provider: openai
+    model: gemini-3.6-flash
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    api_key_env: GEMINI_API_KEY
+    cost_per_1k_input: 1.25
+    cost_per_1k_output: 10.0
+  groq-fast:
+    provider: openai
+    model: llama-3.3-70b-versatile
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    cost_per_1k_input: 0.59
+    cost_per_1k_output: 0.79
+  deepseek-fast:
+    provider: openai
+    model: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    cost_per_1k_input: 0.27
+    cost_per_1k_output: 1.1
+  # ---- route bynara (https://router.bynara.id/v1) — OpenAI-compatible ----
+  bynara-fast:
+    provider: openai
+    model: agnes-2.5-flash
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  bynara-medium:
+    provider: openai
+    model: stepfun-3.7-flash
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  bynara-big:
+    provider: openai
+    model: mistral-large
+    base_url: https://router.bynara.id/v1
+    api_key_env: BYNARA_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  # ---- route opencode zen (https://opencode.ai/zen/v1) — OpenAI-compatible,
+  #      gratis tanpa API key; model free tersedia (deepseek-v4-flash-free dll) ----
+  opencode-zen-fast:
+    provider: openai
+    model: deepseek-v4-flash-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-big:
+    provider: openai
+    model: claude-sonnet-5
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-codex:
+    provider: openai
+    model: gpt-5.1-codex
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  # ---- model free lain di route zen (semua gratis tanpa key) ----
+  opencode-zen-nemotron:
+    provider: openai
+    model: nemotron-3-ultra-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-laguna:
+    provider: openai
+    model: laguna-s-2.1-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-ling:
+    provider: openai
+    model: ling-3.0-flash-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-mimo:
+    provider: openai
+    model: mimo-v2.5-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+  opencode-zen-north:
+    provider: openai
+    model: north-mini-code-free
+    base_url: https://opencode.ai/zen/v1
+    api_key_env: OPENCODE_ZEN_API_KEY
+    cost_per_1k_input: 0.0
+    cost_per_1k_output: 0.0
+
+delegation:
+  max_active: 3
+  max_result_chars: 2000
+  max_steps: 15
+
+skills:
+  dir: skills
+  max_inject: 3
+  max_chars: 800
+  auto_learn: true  # false / DHYBRID_NO_SKILL=1 → matikan skill otomatis
+  fallback: general  # skill cadangan saat tak ada yang cocok; null → matikan fallback
+
+clarify:
+  enabled: true   # false → prompt ambigu tidak ditanya, langsung jalan dengan default
+  ai: true        # pertanyaan digenerate AI (natural & bervariasi); false → template pool lokal
+  max_per_session: 3  # batas tool clarify (agent tanya di tengah kerja)
+
+mode: build   # plan | build — mode kerja agent (Tab di REPL untuk ganti)
+
+workflow:
+  auto_issue: true    # Build: catat task sebagai Issue via repo_issue bila belum ada
+  auto_pr: true       # Build: buat PR via repo_pr setelah selesai
+  escalation: ask     # ask | auto | deny — izin eskalasi model (ask = konfirmasi user)

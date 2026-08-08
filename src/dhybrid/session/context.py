@@ -207,11 +207,34 @@ class SessionContext:
             f"\n\n[JANGAN DICARI ULANG] Proyek/workspace ini punya catatan:\n{memory_digest}"
             if memory_digest else ""
         )
+        # ---- (Fase 2.2) relevant facts semantik — embelishment di atas digest
+        # keyword. Bila model embedding tersedia, tambahkan fakta paling relevan
+        # dgn konteks proyek (makna, bukan keyword). Hanya dari memori jangka
+        # panjang — skill sudah di-inject terpisah via inject_skills. Fallback
+        # aman: kosong bila model tak tersedia.
+        from dhybrid.session.semantic import build_relevant_facts
+
+        if memory_digest:
+            try:
+                # Query semantik yang bermakna: nama proyek + topik dari ringkasan
+                # sesi (bila ada), bukan path mentah. Satu sesi, satu asumsi wajar.
+                semantic_query = Path(cwd).name
+                if self.ctx.summary:
+                    semantic_query += " " + self.ctx.summary[:300]
+                semantic_block = build_relevant_facts(
+                    semantic_query,
+                    mem=self.memory,
+                    top_k=4,
+                )
+            except Exception:  # noqa: BLE001 — semantic tak boleh menggagalkan start
+                semantic_block = ""
+            if semantic_block:
+                memory_block += f"\n[JANGAN DICARI ULANG] Fakta semantik paling relevan:\n{semantic_block}"
+        # Blok tool TIDAK disertakan di sini — AgentLoop melakukan JIT Tool Loading
+        # (spec_text_for) per run, meng-inject hanya tool relevan untuk hemat token.
         self.system_prompt = (
             build_system_prompt(BASE_PROMPT.replace("{workspace_path}", cwd), workspace_hint=cwd)
             + memory_block
-            + "\n\n"
-            + self.tools.spec_text()
         )
         self.hooks = Hooks()
         # hooks default: catat usage ke SQLite (dipanggil loop tiap step)

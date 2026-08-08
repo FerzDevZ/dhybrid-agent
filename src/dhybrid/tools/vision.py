@@ -165,13 +165,6 @@ def read_image(path: str = "", prompt: str = "") -> str:
     )
 
 
-_DEFAULT_PROMPT = (
-    "Jelaskan isi gambar ini secara detail: semua teks yang terlihat "
-    "(transkripsikan persis, termasuk kode/error), struktur/tata letak, dan "
-    "konteksnya. Kalau ada pesan error atau log, kutip baris pentingnya."
-)
-
-
 def register(reg) -> None:
     reg.register(
         "read_image",

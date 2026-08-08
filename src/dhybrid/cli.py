@@ -30,12 +30,19 @@ def _build_context(args, resume: bool = False, sid: str | None = None, interacti
 
 def cmd_repl(args) -> int:
     ctx = _build_context(args, resume=not getattr(args, "fresh", False), interactive=True)
+    from dhybrid.mode import apply_mode
+
+    apply_mode(ctx, getattr(args, "mode", None) or getattr(ctx.cfg, "mode", "build"))
     return repl_loop(ctx)
 
 
 def cmd_run(args) -> int:
     # one-shot: non-interaktif — tool ask_user diblokir, agent pilih default sendiri
     ctx = _build_context(args, interactive=False)
+    from dhybrid.mode import apply_mode
+
+    apply_mode(ctx, getattr(args, "mode", None) or getattr(ctx.cfg, "mode", "build"))
+    # eskalasi di run non-interaktif: tolak otomatis (input() EOF → False)
     if getattr(args, "json", False):
         import json
 
@@ -136,6 +143,59 @@ def cmd_sessions(args) -> int:
     store = SessionStore(cfg.workspace / "sessions.sqlite")
     for s in store.sessions(limit=20):
         print(f"  {s['id']}  {s['created'][:16]}  {s['title'][:60]}")
+    return 0
+
+
+def cmd_session(args) -> int:
+    """dhybrid session branch|merge|tree|path — gaya git untuk sesi."""
+    from dhybrid.session.branching import (
+        BranchingError,
+        branch_tree,
+        create_branch,
+        merge_branch,
+        path_of,
+    )
+
+    cfg = Config.load(Path(args.config) if args.config else None)
+    store = SessionStore(cfg.workspace / "sessions.sqlite")
+
+    try:
+        if args.action == "branch":
+            parent = args.session_id or store.last_session_for_cwd(Path(args.cwd or ".").resolve().as_posix())
+            if not parent:
+                print("ERROR: tentukan sesi induk (tidak ada sesi utk cwd ini)")
+                return 1
+            sid = create_branch(store, parent, args.name)
+            print(f"branch '{args.name}' dibuat → {sid}")
+            print(f"main  → {parent}")
+            return 0
+
+        if args.action == "merge":
+            if not args.session:
+                print("ERROR: tentukan branch yang mau di-merge: dhybrid session merge <branch_id>")
+                return 1
+            target = merge_branch(store, args.session)
+            print(f"merged {args.session} → {target}")
+            return 0
+
+        if args.action == "list":
+            root = args.session or store.last_session_for_cwd(Path(args.cwd or ".").resolve().as_posix())
+            if not root:
+                print("(tidak ada sesi)")
+                return 0
+            tree = branch_tree(store, root)
+            tree.print(name_only=False)
+            return 0
+
+        if args.action == "path":
+            if not args.session:
+                print("ERROR: perlu session id: dhybrid session path <id>")
+                return 1
+            print(" → ".join(path_of(store, args.session)))
+            return 0
+    except BranchingError as e:
+        print(f"ERROR: {e}")
+        return 1
     return 0
 
 
@@ -323,6 +383,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default=None, help="path config.yaml (default: config/default.yaml)")
     parser.add_argument("--cwd", default=None, help="working directory")
     parser.add_argument("--model", default=None, help="preset model utama (mis. anthropic-big)")
+    parser.add_argument("--mode", default=None, choices=["plan", "build"],
+                        help="mode kerja: plan (observasi saja) / build (eksekusi penuh + Issue/PR). Default dari config.")
     parser.add_argument("--yes", action="store_true", help="non-interaktif: tolak perintah berbahaya otomatis")
     parser.add_argument("--list-presets", action="store_true", help="cetak daftar preset (untuk shell completion)")
     sub = parser.add_subparsers(dest="command")
@@ -339,6 +401,17 @@ def main(argv: list[str] | None = None) -> int:
     res = sub.add_parser("resume", help="lanjutkan sesi lama (via ringkasan)")
     res.add_argument("session_id")
     sub.add_parser("sessions", help="daftar sesi")
+    sess = sub.add_parser("session", help="kelola sesi: branch, merge, list tree, path (gaya git)")
+    sess_sub = sess.add_subparsers(dest="action", required=True)
+    _b = sess_sub.add_parser("branch", help="buat branch dari sesi (snapshot copy-on-write)")
+    _b.add_argument("name", help="nama branch")
+    _b.add_argument("--from", dest="session_id", default=None, help="sesi induk (default: terakhir utk cwd)")
+    _m = sess_sub.add_parser("merge", help="merge pesan baru branch ke sesi induknya")
+    _m.add_argument("session", help="id branch yang di-merge")
+    _l = sess_sub.add_parser("list", help="tampilkan pohon branch dari sebuah sesi (default: sesi cwd)")
+    _l.add_argument("session", nargs="?", default=None)
+    _p = sess_sub.add_parser("path", help="jalur sesi → root")
+    _p.add_argument("session", help="id sesi")
     sub.add_parser("skills", help="daftar skill")
     doc = sub.add_parser("doctor", help="diagnosa config, key, koneksi, update")
     doc.add_argument("--offline", action="store_true", help="tanpa cek network")
@@ -354,6 +427,7 @@ def main(argv: list[str] | None = None) -> int:
     # opsi global boleh ditulis sesudah subcommand juga (tanpa menimpa nilai global)
     for p in (repl, run, res, inst):
         p.add_argument("--model", default=argparse.SUPPRESS)
+        p.add_argument("--mode", default=argparse.SUPPRESS, choices=["plan", "build"])
         p.add_argument("--yes", action="store_true", default=argparse.SUPPRESS)
         p.add_argument("--cwd", default=argparse.SUPPRESS)
 
@@ -371,6 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         "tokens": cmd_tokens,
         "resume": cmd_resume,
         "sessions": cmd_sessions,
+        "session": cmd_session,
         "skills": cmd_skills,
         "doctor": cmd_doctor,
         "self-update": cmd_self_update,

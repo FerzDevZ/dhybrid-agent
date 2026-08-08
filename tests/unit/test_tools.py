@@ -12,6 +12,29 @@ def test_register_execute_allowlist():
     assert len(reg.specs()) == 1
 
 
+def test_spec_text_for_jit_subset():
+    """JIT Tool Loading: hanya tool relevan yg di-render, core selalu ada."""
+    reg = ToolRegistry()
+    for name in (
+        "terminal", "read_file", "write_file", "apply_patch", "grep", "ask_user",  # core
+        "git_commit", "git_status",  # git
+        "mvn_test", "mvn_build",  # java
+        "pdf_ops",  # docs
+    ):
+        reg.register(name, f"tool {name}", {}, lambda: "ok")
+    # tanpa keyword ekstra → hanya core
+    core = reg.spec_text_for("halo")
+    assert "git_commit" not in core and "mvn_test" not in core
+    assert "read_file" in core and "terminal" in core
+    # menyebut git → kelompok git ikut
+    with_git = reg.spec_text_for("bagaimana commit branch ini")
+    assert "git_commit" in with_git and "git_status" in with_git
+    # menyebut mvn → kelompok java ikut, git tidak (subset terpisah)
+    with_java = reg.spec_text_for("jalankan mvn build")
+    assert "mvn_test" in with_java and "mvn_build" in with_java
+    assert "git_commit" not in with_java
+
+
 def test_execute_error_handling():
     reg = ToolRegistry()
 
@@ -21,6 +44,22 @@ def test_execute_error_handling():
     reg.register("boom", "b", {}, boom)
     assert "ZeroDivisionError" in reg.execute("boom", {})
     assert "tidak dikenal" in reg.execute("nope", {})
+
+
+def test_browser_tool_register_contract():
+    """Regresi: register() dulu menukar description & fn → tool browser selalu
+    crash 'str() takes no keyword arguments'. Pastikan kontrak terpenuhi."""
+    from dhybrid.tools import browser_tool
+
+    reg = ToolRegistry(allowlist=None)
+    browser_tool.register(reg)
+    browser = reg.specs()[0]
+    assert isinstance(browser["description"], str)
+    # fn harus callable: eksekusi sampai (playwright belum terpasang di CI →
+    # error wajar bertipe pesan playwright, BUKAN TypeError argumen).
+    out = reg.execute("browser", {"action": "snapshot"})
+    assert "str() takes no keyword" not in out
+    assert "TypeError" not in out
 
 
 def test_run_command_ok():

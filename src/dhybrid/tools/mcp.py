@@ -7,8 +7,10 @@ Output di-cap; proses di-terminate saat tool selesai.
 from __future__ import annotations
 
 import json
+import select
 import subprocess
 import threading
+import time
 
 # ---- client stdio minimal ----
 
@@ -38,10 +40,19 @@ class McpClient:
             assert self.proc.stdin is not None and self.proc.stdout is not None
             self.proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}) + "\n")
             self.proc.stdin.flush()
-            for line in self.proc.stdout:
+            deadline = time.monotonic() + self.timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise MCPError(f"{self.name}: timeout {self.timeout}s tanpa respons")
+                ready, _, _ = select.select([self.proc.stdout], [], [], min(remaining, 0.25))
+                if not ready:
+                    continue
+                line = self.proc.stdout.readline()
                 line = line.strip()
                 if not line:
-                    continue
+                    # penutup: server berhenti ngejawab (EOF) tapi belum timeout
+                    raise MCPError(f"{self.name}: server berhenti merespons")
                 try:
                     msg = json.loads(line)
                 except json.JSONDecodeError:
@@ -50,7 +61,6 @@ class McpClient:
                     if "error" in msg:
                         raise MCPError(f"{self.name}: {msg['error']}")
                     return msg.get("result", {})
-        raise MCPError(f"{self.name}: tidak ada respons")
 
     def initialize(self) -> None:
         self._request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "dhybrid", "version": "0.3"}})
@@ -71,6 +81,7 @@ class McpClient:
     def close(self) -> None:
         try:
             self.proc.terminate()
+            self.proc.wait(timeout=2)
         except Exception:  # noqa: BLE001, S110
             pass
 
@@ -92,12 +103,13 @@ def register(reg, servers: list[dict] | None = None, max_chars: int = 8000) -> N
             client.close()
             continue
         for tool in tools:
-            tname = tool.get("name", "")
-            desc = tool.get("description", "")[:120]
-            schema = tool.get("inputSchema", {})
+            tname = tool.get("name", "") or ""
+            # guard None dari server: description:null / inputSchema:{properties:null}
+            desc = str(tool.get("description") or "")[:120]
+            props = (tool.get("inputSchema") or {}).get("properties", {}) or {}
             reg.register(
                 f"mcp_{name}_{tname}",
                 f"[MCP:{name}] {desc}",
-                schema.get("properties", {}),
+                props,
                 (lambda c=client, tn=tname, **kw: c.call_tool(tn, kw)) if callable(getattr(client, "call_tool", None)) else None,
             )

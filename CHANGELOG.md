@@ -4,6 +4,36 @@ Semua perubahan penting dhybrid-agent dicatat di sini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id-ID/1.1.0/),
 versi mengikuti [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Plan Mode / Build Mode (keamanan + workflow)
+
+- **Mode kerja `plan`/`build`** (default di `config/default.yaml`):
+  - `plan` = observasi saja: terminal dibatasi perintah read-only
+    (`ls cat grep strings watch` dst, tanpa metachar shell), tool mutasi
+    (write_file, apply_patch, git_commit, repo_issue, repo_pr, dll) diblokir.
+  - `build` = eksekusi penuh + alur Issue/PR.
+- **Shortcut Tab** di REPL: ganti plan ⇄ build (buffer kosong); saat mengetik
+  Tab tetap autocomplete.
+- **Slash command** `/plan`, `/build`, `/mode`, dan flag CLI `--mode plan|build`.
+- **Tool repo** baru: `repo_issues` (list read-only), `repo_issue` (buat Issue),
+  `repo_pr` (buat PR/MR) untuk GitHub/GitLab (token env
+  `GITHUB_TOKEN`/`GITLAB_TOKEN`).
+- **Eskalasi wajib izin user**: sebelum model di-upgrade (kualitas/error/tool-error)
+  REPL bertanya `y/N`. Tolak = lanjut model sama. Non-interaktif = tolak
+  (fail-safe); `workflow.escalation: auto` untuk otomatis.
+- Instructi mode disuntik ke system prompt via `dhybrid.mode`.
+
+### Distribusi PyPI & semver
+
+- **Wheel standalone** — `config/default.yaml` kini terkemas di dalam paket
+  (`src/dhybrid/config/default.yaml`, dibaca via `importlib.resources`);
+  `pip install dhybrid-agent` berfungsi tanpa file repo.
+- **Metadata PyPI** — `[project.urls]`, keywords, classifiers di `pyproject.toml`.
+- **Workflow rilis** (`.github/workflows/release.yml`) — tag `v*` → validasi
+  versi vs tag → build wheel+sdist (`python -m build`) → publish PyPI (trusted
+  publishing) → GitHub Release dengan artifact.
+
 ## [0.9.6] - 2026-08-04
 
 ### Reliability Power-up: Retry + Redis Persistence + MIME Media

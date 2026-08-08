@@ -77,6 +77,9 @@ MENU LENGKAP — pilih dengan prefix / :
   🗑️  /forget <k>        hapus fakta memorip
   📜 /memories          lihat fakta terbaru
   🔍 /search-memory <q>  cari fakta (FTS)
+  🛡️  /plan, /build, /mode  ganti MODE kerja (Tab di REPL juga bisa):
+        PLAN = observasi saja (terminal read-only, tool mutasi diblokir)
+        BUILD = eksekusi penuh + Issue/PR (repo_issues/repo_issue/repo_pr)
   🚪 /quit, /exit        keluar
 
 CLI (di luar REPL): dhybrid run "<prompt>" · dhybrid resume <id> ·
@@ -436,9 +439,19 @@ def handle_command(cmd: str, ctx) -> bool:
             print("(konteks masih pendek — belum perlu kompaksi)")
         else:
             client = ctx.router.small if ctx.router else ctx._fresh_client()
-            summary = compact_conversation(client, cands)
-            ctx.ctx.apply_compaction(summary)
-            print(style(f"OK: konteks dikompaksi ({len(cands)} pesan -> ringkasan)", "32"))
+            try:
+                summary = compact_conversation(client, cands)
+            except Exception as e:  # noqa: BLE001 — jangan crash REPL karena provider error
+                summary = None
+                print(style(f"! kompaksi gagal: {e}", "33"))
+            if not summary:
+                print(style(
+                    "! kompaksi batal — provider sibuk/error (ResourceExhausted dll). "
+                    "Konteks tidak diubah. Coba lagi nanti.", "33"
+                ))
+            else:
+                ctx.ctx.apply_compaction(summary)
+                print(style(f"OK: konteks dikompaksi ({len(cands)} pesan -> ringkasan)", "32"))
     elif name == "/clear":
         ctx.ctx.messages.clear()
         ctx.ctx.budget = TokenBudget(ctx.ctx.cfg.budget)
@@ -458,6 +471,18 @@ def handle_command(cmd: str, ctx) -> bool:
         _cmd_memories(ctx)
     elif name == "/search-memory":
         _cmd_search_memory(ctx, arg)
+    elif name in ("/plan", "/build", "/mode"):
+        from dhybrid.mode import MODE_LABEL, apply_mode
+
+        if name == "/plan":
+            target = "plan"
+        elif name == "/build":
+            target = "build"
+        else:  # /mode = toggle
+            target = "build" if getattr(ctx, "mode", "build") == "plan" else "plan"
+        mode = apply_mode(ctx, target)
+        hint = "hanya observasi" if mode == "plan" else "eksekusi penuh + Issue/PR"
+        print(style(f"[Mode: {MODE_LABEL[mode]}] {hint}", "33" if mode == "plan" else "32"))
     elif name == "/shot":
         cmd_shot(ctx, arg)
     elif name == "/pasteshot":

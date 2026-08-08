@@ -36,11 +36,8 @@ class ToolBlockFilter:
         self._emit = emit
         self._buf = ""
         self._end: str | None = None  # end-marker saat berada di dalam blok
-        self.debug = False
 
     def _out(self, text: str) -> None:
-        if self.debug:
-            print(f"[filter-emit] {text!r}", file=__import__("sys").stderr)
         self._emit(text)
 
     def feed(self, chunk: str) -> None:
@@ -81,8 +78,6 @@ class ToolBlockFilter:
                     self._out(self._buf[:idx])
                 self._buf = self._buf[idx + len(start):]
                 self._end = end
-                if self.debug:
-                    print(f"[filter-masuk-blok] end={end!r}", file=__import__("sys").stderr)
             else:
                 idx = self._buf.find(self._end)
                 if idx == -1:

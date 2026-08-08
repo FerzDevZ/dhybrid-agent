@@ -30,7 +30,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     title TEXT,
     summary TEXT,
     final_text TEXT,
-    cwd TEXT
+    cwd TEXT,
+    parent_session_id TEXT,
+    branch_name TEXT,
+    fork_base_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS session_state (
     session_id TEXT PRIMARY KEY,
@@ -72,15 +75,24 @@ class SessionStore:
         self.conn.executescript(SCHEMA)
         # migrasi: DB lama (tanpa kolom cwd) → tambahkan kolom
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(sessions)")}
-        if "cwd" not in cols:
-            self.conn.execute("ALTER TABLE sessions ADD COLUMN cwd TEXT")
-            self.conn.commit()
+        col_types = {"cwd": "TEXT", "parent_session_id": "TEXT", "branch_name": "TEXT", "fork_base_id": "INTEGER"}
+        for extra, ctype in col_types.items():
+            if extra not in cols:
+                self.conn.execute(f"ALTER TABLE sessions ADD COLUMN {extra} {ctype}")
+                self.conn.commit()
 
-    def new_session(self, title: str = "untitled", cwd: str | None = None) -> str:
+    def new_session(
+        self,
+        title: str = "untitled",
+        cwd: str | None = None,
+        parent_session_id: str | None = None,
+        branch_name: str | None = None,
+    ) -> str:
         sid = uuid.uuid4().hex[:12]
         self.conn.execute(
-            "INSERT INTO sessions (id, created, title, summary, final_text, cwd) VALUES (?,?,?,?,?,?)",
-            (sid, _now(), title, "", "", cwd or ""),
+            "INSERT INTO sessions (id, created, title, summary, final_text, cwd, "
+            "parent_session_id, branch_name) VALUES (?,?,?,?,?,?,?,?)",
+            (sid, _now(), title, "", "", cwd or "", parent_session_id, branch_name),
         )
         self.conn.commit()
         return sid
@@ -99,12 +111,13 @@ class SessionStore:
         ).fetchone()
         return row[0] if row else ""
 
-    def append_message(self, sid: str, role: str, content: str, tool_calls=None) -> None:
-        self.conn.execute(
+    def append_message(self, sid: str, role: str, content: str, tool_calls=None) -> int:
+        cur = self.conn.execute(
             "INSERT INTO messages (session_id, role, content, tool_calls, created) VALUES (?,?,?,?,?)",
             (sid, role, content, json.dumps(tool_calls) if tool_calls else None, _now()),
         )
         self.conn.commit()
+        return cur.lastrowid
 
     def record_usage(
         self,
@@ -131,7 +144,9 @@ class SessionStore:
 
     def get_session(self, sid: str) -> dict | None:
         row = self.conn.execute(
-            "SELECT id, created, title, summary, final_text, cwd FROM sessions WHERE id=?", (sid,)
+            "SELECT id, created, title, summary, final_text, cwd, "
+            "parent_session_id, branch_name, fork_base_id FROM sessions WHERE id=?",
+            (sid,),
         ).fetchone()
         if not row:
             return None
@@ -142,6 +157,9 @@ class SessionStore:
             "summary": row[3] or "",
             "final_text": row[4] or "",
             "cwd": row[5] or "",
+            "parent_session_id": row[6],
+            "branch_name": row[7],
+            "fork_base_id": row[8],
         }
 
     def last_messages(self, sid: str, n: int = 5) -> list[dict]:
@@ -151,6 +169,24 @@ class SessionStore:
             (sid, n),
         ).fetchall()
         return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+
+    def all_messages(self, sid: str) -> list[dict]:
+        """Semua pesan login urut by id — termasuk tool_calls & id (utk branch/merge)."""
+        rows = self.conn.execute(
+            "SELECT id, role, content, tool_calls, created FROM messages "
+            "WHERE session_id=? ORDER BY id",
+            (sid,),
+        ).fetchall()
+        return [
+            {
+                "id": r[0],
+                "role": r[1],
+                "content": r[2],
+                "tool_calls": json.loads(r[3]) if r[3] else None,
+                "created": r[4],
+            }
+            for r in rows
+        ]
 
     def usage(self, sid: str | None = None) -> list[dict]:
         if sid:
@@ -188,6 +224,33 @@ class SessionStore:
         self.conn.execute("DELETE FROM session_state WHERE session_id=?", (sid,))
         self.conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
         self.conn.commit()
+
+    # ---- (2.3) session branching helpers ----
+
+    def set_fork_base(self, sid: str, fork_base_id: int) -> None:
+        """Tandai id pesan terakhir yang disalin dari parent saat branch dibuat."""
+        self.conn.execute("UPDATE sessions SET fork_base_id=? WHERE id=?", (fork_base_id, sid))
+        self.conn.commit()
+
+    def branches_of(self, parent_sid: str) -> list[dict]:
+        """Semua branch (anak langsung) dari sebuah sesi."""
+        rows = self.conn.execute(
+            "SELECT id, title, branch_name, created FROM sessions "
+            "WHERE parent_session_id=? ORDER BY created, rowid",
+            (parent_sid,),
+        ).fetchall()
+        return [
+            {"id": r[0], "title": r[1], "branch_name": r[2], "created": r[3]}
+            for r in rows
+        ]
+
+    def find_branch(self, parent_sid: str, branch_name: str) -> str | None:
+        """Id sesi branch bernama `branch_name` di bawah `parent_sid`, atau None."""
+        row = self.conn.execute(
+            "SELECT id FROM sessions WHERE parent_session_id=? AND branch_name=? LIMIT 1",
+            (parent_sid, branch_name),
+        ).fetchone()
+        return row[0] if row else None
 
     # ---- checkpoint: persist state counters (run_count, fallback_uses, …) ----
     def save_checkpoint(self, sid: str, state: dict) -> None:

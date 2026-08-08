@@ -62,6 +62,14 @@ class MemoryStore:
             return ""
         return "\n".join(f"• {key}: {value[:220]}" for key, value in rows)
 
+    def all_facts(self, limit: int = 200) -> list[tuple[str, str]]:
+        """Semua fakta (key, value) terbaru — API publik utk memori semantik."""
+        rows = self.conn.execute(
+            "SELECT key, value FROM memory ORDER BY updated DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [(k, v or "") for k, v in rows if v]
+
     @staticmethod
     def _fts_terms(context: str) -> list[str]:
         """Token alfanumerik dari teks konteks (cwd/path) untuk query FTS aman."""

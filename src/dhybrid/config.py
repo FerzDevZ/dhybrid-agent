@@ -9,6 +9,17 @@ from pathlib import Path
 import yaml
 
 
+def _bundled_default_config() -> Path | None:
+    """Lokasi default.yaml terkemas di wheel/install (importlib.resources)."""
+    try:
+        from importlib.resources import files as res_files
+
+        p = res_files("dhybrid").joinpath("config", "default.yaml")
+        return Path(str(p)) if p.is_file() else None
+    except Exception:  # noqa: BLE001 — dev/editable install: file tak terkemas
+        return None
+
+
 @dataclass
 class ModelConfig:
     provider: str = "openai"
@@ -30,6 +41,55 @@ class ModelConfig:
                 + completion / 1000 * self.cost_per_1k_output)
 
 
+def _apply_workflow(target: dict, data: dict) -> None:
+    """Terapkan override workflow (auto_issue/auto_pr/escalation) ke default."""
+    for k in ("auto_issue", "auto_pr", "escalation"):
+        if k in data:
+            target[k] = data[k]
+
+
+def _apply_dict(cfg: Config, data: dict) -> None:
+    """Terapkan satu lapis dict yaml ke cfg (model/budget/…), tanpa env."""
+    if "workspace" in data:
+        cfg.workspace = Path(data["workspace"]).expanduser()
+    if "model" in data and isinstance(data["model"], dict):
+        for k, v in data["model"].items():
+            if k == "small_model":
+                cfg.small_model = v
+            elif hasattr(cfg.model, k):
+                setattr(cfg.model, k, v)
+    if "small_model" in data:
+        cfg.small_model = data["small_model"]
+    for key in ("budget", "context", "tool", "delegation", "skills", "clarify"):
+        if key in data and isinstance(data[key], dict):
+            setattr(cfg, key, data[key])
+    if "mode" in data and isinstance(data["mode"], str):
+        cfg.mode = data["mode"] if data["mode"] in ("plan", "build") else "build"
+    if "workflow" in data and isinstance(data["workflow"], dict):
+        _apply_workflow(cfg.workflow, data["workflow"])
+    if "presets" in data and isinstance(data["presets"], dict):
+        cfg.presets = data["presets"]
+    if "extra" in data and isinstance(data["extra"], dict):
+        cfg.extra = data["extra"]
+
+
+def load_project_config(cwd: str | Path | None = None) -> dict:
+    """Config per-proyek: <cwd>/.dhybrid/config.yaml (kosong bila tak ada).
+
+    Memungkinkan user mengatur model/budget/tool khas repo TANPA menyentuh
+    config global. Prioritas: default < proyek < user < env.
+    """
+    root = Path(cwd) if cwd else Path.cwd()
+    p = root / ".dhybrid" / "config.yaml"
+    if not p.exists():
+        return {}
+    try:
+        data = yaml.safe_load(p.read_text()) or {}
+    except yaml.YAMLError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 @dataclass
 class Config:
     workspace: Path = field(default_factory=lambda: Path.home() / ".dhybrid")
@@ -43,17 +103,26 @@ class Config:
     clarify: dict = field(default_factory=lambda: {"enabled": True, "ai": True, "max_per_session": 3})
     presets: dict = field(default_factory=dict)
     extra: dict = field(default_factory=dict)  # custom user settings
+    mode: str = "build"  # plan | build — mode kerja agent
+    workflow: dict = field(default_factory=lambda: {
+        "auto_issue": True,      # Build: catat task sebagai Issue bila belum ada
+        "auto_pr": True,         # Build: buat PR setelah selesai
+        "escalation": "ask",     # ask | auto | deny — izin eskalasi model
+    })
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> Config:
-        """Cari config: path eksplisit → cwd/config/default.yaml → config bawaan
-        di direktori install (biar jalan dari folder mana pun)."""
+        """Cari config: path eksplisit → cwd/config/default.yaml → bawaan
+        terkemas di wheel (importlib.resources) → direktori repo (dev)."""
         candidates: list[Path] = []
         if path:
             candidates.append(Path(path))
         else:
             candidates.append(Path("config/default.yaml"))
-            candidates.append(Path(__file__).resolve().parents[2] / "config" / "default.yaml")
+        bundled = _bundled_default_config()
+        if bundled is not None:
+            candidates.append(bundled)
+        candidates.append(Path(__file__).resolve().parents[2] / "config" / "default.yaml")
         cfg = cls()
         data: dict | None = None
         for cand in candidates:
@@ -62,25 +131,13 @@ class Config:
                 break
         data = data or {}
 
-        if "workspace" in data:
-            cfg.workspace = Path(data["workspace"]).expanduser()
+        _apply_dict(cfg, data)
 
-        if "model" in data and isinstance(data["model"], dict):
-            for k, v in data["model"].items():
-                if k == "small_model":
-                    cfg.small_model = v
-                elif hasattr(cfg.model, k):
-                    setattr(cfg.model, k, v)
-
-        for key in ("budget", "context", "tool", "delegation", "skills", "clarify"):
-            if key in data and isinstance(data[key], dict):
-                setattr(cfg, key, data[key])
-
-        if "presets" in data and isinstance(data["presets"], dict):
-            cfg.presets = data["presets"]
-        
-        if "extra" in data and isinstance(data["extra"], dict):
-            cfg.extra = data["extra"]
+        # project override: <cwd>/.dhybrid/config.yaml (utama utk CLI: cwd pengguna)
+        try:
+            _apply_dict(cfg, load_project_config(os.getcwd()))
+        except Exception:  # noqa: S110, BLE001 — jangan gagal startup karena config proyek
+            pass
 
         # user override (~/.dhybrid/config.yaml) — menimpa model bawaan (persisten)
         from dhybrid.session.userconfig import load_user_config

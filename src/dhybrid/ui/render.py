@@ -22,7 +22,7 @@ def style(text: str, code: str = "36") -> str:
 class _BufferedStreamPrint:
     """Buffer delta kecil di non-TTY mode & hanya emit baris penuh.
 
-    Di TTY: buffer ringan (flush per 50ms atau newline) agar output rapi.
+    Di TTY: buffer baris-belum-lengkap (untuk pewarnaan) & flush per baris.
     Di non-TTY (pipe/CI): buffer per-baris — cegah output pecah karakter
     demi karakter (misal 'H\\nai!\\n👋...' jadi 'Hai! 👋...').
     """
@@ -30,13 +30,14 @@ class _BufferedStreamPrint:
     def __init__(self) -> None:
         self._buf = ""
         self._in_tty = False
+        self._pending = ""  # TTY: bagian baris yang belum berakhiran newline
 
     def __call__(self, text: str) -> None:
         # Deteksi mode TTY di setiap call (bisa berubah di runtime)
         is_tty_now = is_tty() and not os.environ.get("NO_COLOR")
 
         if is_tty_now:
-            # TTY mode: write langsung untuk streaming real-time
+            # TTY mode: warna baris lengkap + tulis langsung (streaming halus)
             if not self._in_tty:
                 # Pertama kali switch ke TTY — flush buffer lama
                 if self._buf:
@@ -45,9 +46,20 @@ class _BufferedStreamPrint:
                     self._buf = ""
                 self._in_tty = True
 
-            # Di TTY, write langsung tanpa buffer untuk streaming halus
-            sys.stdout.write(text)
-            sys.stdout.flush()
+            tail_nl = text.endswith("\n")
+            lines = (self._pending + text).split("\n")
+            self._pending = lines.pop()  # bagian tak lengkap ditahan utk pewarnaan
+            if lines:
+                sys.stdout.write(_colorize_lines("\n".join(lines)))
+                if tail_nl:
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+            # baris sangat panjang tanpa newline (mis. kode satu-baris) → emit
+            # apa adanya agar layar tidak terasa membeku; warna dilewati.
+            if len(self._pending) > 512:
+                sys.stdout.write(self._pending)
+                sys.stdout.flush()
+                self._pending = ""
             return
 
         # Non-TTY mode (pipe/CI): buffer hingga ada newline
@@ -57,6 +69,10 @@ class _BufferedStreamPrint:
                 sys.stdout.write(self._buf + "\n")
                 sys.stdout.flush()
                 self._buf = ""
+            if self._pending:
+                sys.stdout.write(self._pending)
+                sys.stdout.flush()
+                self._pending = ""
             self._in_tty = False
 
         # non-TTY: buffer hingga ada newline
@@ -73,6 +89,10 @@ class _BufferedStreamPrint:
             sys.stdout.write(self._buf)
             sys.stdout.flush()
             self._buf = ""
+        if self._pending:
+            sys.stdout.write(_colorize_lines(self._pending) + "\n")
+            sys.stdout.flush()
+            self._pending = ""
 
 
 # Singleton instance — state buffer persisten tiap delta
@@ -82,11 +102,28 @@ _streamer = _BufferedStreamPrint()
 def stream_print(text: str) -> None:
     """Stream output model ke terminal.
 
-    Di TTY: tulis langsung (stream progres, cursor management).
+    Di TTY: tulis per-baris (lengkap) + warna error/peringatan.
     Di non-TTY (pipe/CI): buffer per-baris agar output tidak pecah
     karakter demi karakter.
     """
     _streamer(text)
+
+
+def _colorize_lines(text: str) -> str:
+    """Warna baris error/peringatan saat stream (hanya dipanggil saat TTY)."""
+    if not text:
+        return text
+    return "\n".join(_colorize_line(l) for l in text.split("\n"))
+
+
+def _colorize_line(line: str) -> str:
+    if not line:
+        return line
+    if line.startswith(("ERROR", "[ERROR", "Traceback (most recent", "  File \"", "!pip install", "Error:")):
+        return style(line, "31")
+    if line.startswith(("[exit ", "[stderr]", "[timeout", "[job #", "WARNING:", "warning:")):
+        return style(line, "33")
+    return line
 
 
 # Tag-tag markup yang perlu dibersihkan dari output streaming

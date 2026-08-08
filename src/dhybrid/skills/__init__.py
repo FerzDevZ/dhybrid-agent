@@ -23,12 +23,28 @@ from dhybrid.skills.marketplace import (
     list_published_skills,
     search_skills,
 )
+from dhybrid.skills.plugin import (
+    PluginRegistryError,
+    RegisteredPlugin,
+    SkillPlugin,
+    SkillPluginRegistry,
+    default_registry,
+    discover_plugins,
+    dskill,
+)
 
 __all__ = [
+    "PluginRegistryError",
+    "RegisteredPlugin",
     "Skill",
     "SkillPackage",
+    "SkillPlugin",
+    "SkillPluginRegistry",
     "auto_skill_worthwhile",
     "build_skill_md",
+    "default_registry",
+    "discover_plugins",
+    "dskill",
     "export_skill",
     "import_skill",
     "inject_skills",

@@ -8,13 +8,41 @@ from dhybrid import __version__
 from dhybrid.agent.hooks import Hooks
 from dhybrid.agent.loop import AgentLoop, LoopConfig, LoopResult
 from dhybrid.llm.base import ChatMessage
+from dhybrid.mode import BUILD, MODE_LABEL, PLAN, apply_mode, mode_system_block
 from dhybrid.skills.loader import extract_skill_mentions, inject_skills, select_skills
 from dhybrid.ui import rich_ui
 from dhybrid.ui.commands import handle_command
 from dhybrid.ui.render import stream_print, style
 from dhybrid.ui.status import (
+    fmt_tokens,
     format_status,  # noqa: F401  (API publik, dipakai doctor nanti)
 )
+
+
+def _escalation_confirm(ctx):
+    """Callback izin eskalasi dari user (REPL interaktif).
+
+    Policy dari config workflow.escalation:
+      ask  → tanya y/N (default; tolak saat tidak bisa bertanya)
+      auto → izinkan tanpa bertanya
+      deny → selalu tolak
+    """
+    wf = getattr(ctx.cfg, "workflow", {}) or {}
+    policy = wf.get("escalation", "ask")
+
+    def _confirm(reason: str) -> bool:
+        if policy != "ask":
+            return policy == "auto"
+        try:
+            ans = input(
+                f"⚠ Model ingin ESKALASI ke model yang lebih kuat ({reason})\n"
+                "Izinkan? (y/N) "
+            )
+            return ans.strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False  # tolak — AI tidak boleh eskalasi tanpa izin user
+
+    return _confirm
 
 
 def run_agent(ctx, prompt: str, push_prompt: bool = True) -> LoopResult:
@@ -40,6 +68,7 @@ def run_agent(ctx, prompt: str, push_prompt: bool = True) -> LoopResult:
     loop_cfg = LoopConfig(
         max_tool_output_chars=ctx.cfg.tool.get("max_output_chars", 8000),
         escalation_chain=chain,
+        escalation_confirm_fn=_escalation_confirm(ctx),
     )
 
     def _client_factory(preset_name: str):
@@ -63,7 +92,11 @@ def run_agent(ctx, prompt: str, push_prompt: bool = True) -> LoopResult:
         ask_state=ctx.ask_state,
         clarify_state=getattr(ctx, "clarify_state", None),
     )
-    result = loop.run(prompt, ctx.system_prompt, push_prompt=push_prompt)
+    sys_prompt = ctx.system_prompt
+    delta = mode_system_block(getattr(ctx, "mode", BUILD), getattr(ctx.cfg, "workflow", {}))
+    if delta and delta not in sys_prompt:
+        sys_prompt = sys_prompt + "\n\n" + delta
+    result = loop.run(prompt, sys_prompt, push_prompt=push_prompt)
 
     # simpan ke sesi (prompt kosong = kelanjutan jawaban user, tidak disimpan ganda)
     if prompt.strip():
@@ -116,6 +149,10 @@ def show_welcome(ctx) -> None:
         suffix = f" — {title}" if title else ""
         print(style(f"  melanjutkan sesi terakhir di proyek ini: {ctx.resumed_id}{suffix}", "90"))
     print(f"  workspace   : {ctx.cwd}")
+    mode = getattr(ctx, "mode", BUILD)
+    if mode not in MODE_LABEL:  # ctx mock/eksternal tanpa mode
+        mode = BUILD
+    print(style(f"  mode kerja  : [{MODE_LABEL[mode]}]" + ("  (observasi — Tab untuk ganti ke BUILD)" if mode == PLAN else "  (eksekusi — Tab untuk ganti ke PLAN)"), "33" if mode == PLAN else "32"))
     print()
     print("  MENU — pilih dengan prefix /, atau langsung ketik pertanyaan:")
     print()
@@ -128,9 +165,97 @@ def show_welcome(ctx) -> None:
     print("  🚪 /quit                keluar")
     print()
     print(style("  Tips: tanpa API key pun bisa dipakai — route opencode zen gratis sudah jadi default.", "90"))
+    print(style("  Ctrl+P = menu perintah · Tab saat kosong = ganti mode · Ctrl+R = riwayat", "90"))
     notice = check_update_notice()  # internal sudah try/except, tidak akan raise
     if notice:
         print(style(notice, "33"))
+
+
+def _toggle_mode(ctx) -> None:
+    """Plan ⇄ Build — sinkronkan gerbang tool + terminal."""
+    new_mode = PLAN if getattr(ctx, "mode", BUILD) != PLAN else BUILD
+    apply_mode(ctx, new_mode)
+    label = MODE_LABEL[new_mode]
+    hint = (
+        "hanya observasi — tool mutasi & perintah berbahaya diblokir"
+        if new_mode == PLAN
+        else "eksekusi penuh + Issue/PR"
+    )
+    print(style(f"\n[Mode: {label}] {hint}", "33" if new_mode == PLAN else "32"))
+
+
+# daftar kata untuk autocomplete: semua slash-command + nama skill
+SLASH_COMMANDS = [
+    "/help", "/settings", "/setup", "/key", "/model", "/tokens", "/compact",
+    "/clear", "/sessions", "/shot", "/pasteshot", "/paste", "/skills", "/skill",
+    "/skill off", "/remember", "/rmem", "/forget", "/fmem", "/memories", "/mem",
+    "/search-memory", "/quit", "/plan", "/build",
+]
+
+
+def _status_line(ctx) -> str:
+    """Status bar bawah (prompt_toolkit) — dibaca saat prompt tampil.
+
+    Menampilkan mode, pola token/anggaran, biaya, langkah, model aktif,
+    dan stats router. Defensif: ctx eksternal/mock tanpa atribut tidak crash.
+    """
+    mode = getattr(ctx, "mode", BUILD)
+    label = MODE_LABEL.get(mode, "BUILD")
+    try:
+        model = ctx.current_model_label()
+    except Exception:  # noqa: BLE001 — ctx eksternal/polosan
+        model = ""
+    budget = getattr(ctx, "budget", None)
+    used = getattr(budget, "used", 0) or 0
+    soft = getattr(budget, "soft", 0) or 0
+    cost = getattr(ctx, "last_cost", 0.0) or 0.0
+    steps = getattr(ctx, "steps", 0) or 0
+    rt = ""
+    router = getattr(ctx, "router", None)
+    if router is not None and getattr(router, "stats", None):
+        s = router.stats
+        rt = f"  small={s.get('small', 0)} big={s.get('big', 0)}"
+    pct = f" ({used / max(soft, 1) * 100:.0f}%)" if soft else ""
+    left = (
+        f"[{label}] {fmt_tokens(used)}/{fmt_tokens(soft)}{pct} · ${cost:.2f}"
+        f" · step {steps} · {model}{rt}"
+    )
+    right = "Tab=mode · Ctrl+P=perintah · Ctrl+R=riwayat · Ctrl+D=quit"
+    try:
+        import shutil
+
+        cols = shutil.get_terminal_size((80, 24)).columns
+    except Exception:  # noqa: BLE001
+        cols = 80
+    pad = max(cols - len(left) - len(right) - 3, 2)
+    return left + " " * pad + right
+
+
+def _repl_prompt(ctx, pt_session, kb=None) -> str:
+    """Prompt interaktif — label mode (PLAN kuning / BUILD hijau) + autocomplete
+    + status bar bawah (mode, token, step, model).
+    """
+    from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
+
+    words = list(SLASH_COMMANDS)
+    words += [s.name for s in ctx.all_skills]
+    words += ["/skill " + s.name for s in ctx.all_skills]
+    pt_session.completer = FuzzyCompleter(
+        WordCompleter(sorted(set(words)), ignore_case=True)
+    )
+    mode = getattr(ctx, "mode", BUILD)
+    color = "ansiyellow" if mode == PLAN else "ansigreen"
+    return pt_session.prompt(
+        [(color, f"[{MODE_LABEL[mode]}] dhybrid> ")],
+        key_bindings=kb,
+        bottom_toolbar=lambda: _status_line(ctx),
+    ).strip()
+
+
+def _repl_plain_prompt(ctx) -> str:
+    mode = getattr(ctx, "mode", BUILD)
+    color = "33" if mode == PLAN else "32"
+    return input(style(f"[{MODE_LABEL[mode]}] dhybrid> ", color)).strip()
 
 
 def repl_loop(ctx) -> int:
@@ -149,6 +274,8 @@ def repl_loop(ctx) -> int:
 
         terminal.confirm_fn = _confirm
 
+    apply_mode(ctx)  # init gerbang mode (Plan = read-only)
+
     show_welcome(ctx)
     if not _has_api_key(ctx):
         print(
@@ -166,44 +293,51 @@ def repl_loop(ctx) -> int:
     # non-TTY (piped: `echo "halo" | dhybrid repl`) supaya scripting tetap jalan.
     history_file = ctx.workspace / "history"
     pt_session = None
+    kb = None  # keybinding custom (Tab): mode toggler saat buffer kosong
     try:
         import sys as _sys
 
         if _sys.stdin.isatty():
             from prompt_toolkit import PromptSession
             from prompt_toolkit.history import FileHistory
+            from prompt_toolkit.key_binding import KeyBindings
 
             pt_session = PromptSession(history=FileHistory(str(history_file)))
+            kb = KeyBindings()
+
+            @kb.add("tab")
+            def _on_tab(event) -> None:
+                buf = event.current_buffer
+                if not buf.text.strip():
+                    # buffer kosong: Tab ⇄ Plan/Build mode
+                    _toggle_mode(ctx)
+                    event.app.invalidate()
+                else:
+                    # sedang mengetik → Tab tetap untuk autocomplete
+                    buf.complete_next()
+
+            @kb.add("c-p")
+            def _on_ctrl_p(event) -> None:
+                # Command palette: isi "/" & buka autocomplete (fuzzy) semua perintah.
+                buf = event.current_buffer
+                if buf.text:
+                    return  # sudah mengetik — biarkan autocomplete biasa
+                buf.text = "/"
+                buf.cursor_position = 1
+                buf.start_completion()
+                event.app.invalidate()
+
     except (ImportError, OSError):
         pt_session = None
-
-    # daftar kata untuk autocomplete: semua slash-command + nama skill
-    SLASH_COMMANDS = [
-        "/help", "/settings", "/setup", "/key", "/model", "/tokens", "/compact",
-        "/clear", "/sessions", "/shot", "/pasteshot", "/paste", "/skills", "/skill", "/skill off", "/remember",
-        "/rmem", "/forget", "/fmem", "/memories", "/mem", "/search-memory", "/quit",
-    ]
-
-    def _repl_prompt() -> str:
-        nonlocal pt_session
-        if pt_session is not None:
-            from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
-
-            words = list(SLASH_COMMANDS)
-            words += [s.name for s in ctx.all_skills]
-            words += ["/skill " + s.name for s in ctx.all_skills]
-            pt_session.completer = FuzzyCompleter(
-                WordCompleter(sorted(set(words)), ignore_case=True)
-            )
-            # prompt_toolkit TIDAK menerima string ber-ANSI (dirender literal
-            # jadi "^[[32m..."); pakai FormattedText dengan nama warna ANSI.
-            return pt_session.prompt([("ansigreen", "dhybrid> ")]).strip()
-        return input(style("dhybrid> ", "32")).strip()
+        kb = None
 
     try:
         while True:
             try:
-                raw = _repl_prompt()
+                if pt_session is not None:
+                    raw = _repl_prompt(ctx, pt_session, kb)
+                else:
+                    raw = _repl_plain_prompt(ctx)
             except (EOFError, KeyboardInterrupt):
                 print("\nbye 👋")
                 return 0
