@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 #
-# dhybrid-agent — installer one-liner
+# dhybrid-agent — installer one-liner (auto-detect distro, sekali jalan full install)
 #
 #   curl -fsSL https://raw.githubusercontent.com/FerzDevZ/dhybrid-agent/main/install.sh | bash
+#
+# Yang dilakukan otomatis (sekali jalan):
+#   1. Deteksi distro & package manager (apt/dnf/yum/pacman/zypper/apk/brew)
+#   2. Install prasyarat sistem bila belum ada: git, python3 >= 3.12, python3-venv/pip
+#   3. Clone/update repo → buat venv → install dependensi (full, termasuk dev)
+#   4. Symlink `dhybrid` ke PATH, set PATH permanen, shell completion, .env
 #
 # Variabel env opsional:
 #   DHYBRID_REPO_URL    repo git (default: https://github.com/FerzDevZ/dhybrid-agent.git)
@@ -10,30 +16,27 @@
 #   DHYBRID_INSTALL_DIR direktori instalasi (default: ~/.dhybrid-agent)
 #   DHYBRID_BIN_DIR     direktori symlink binary (default: ~/.local/bin)
 #   DHYBRID_SKIP_ENV    1 = jangan buat .env dari .env.example
+#   DHYBRID_SKIP_SYS    1 = lewati pemasangan paket sistem (pakai python yang ada)
 #   DHYBRID_USE_UV      1 = gunakan uv untuk instalasi (lebih cepat)
 #   DHYBRID_INSTALL_DEV 1 = install dev deps (default: 1)
 #
-# Aman dipakai via pipe (non-interaktif, tidak ada prompt).
+# Aman dipakai via pipe (non-interaktif). Prompt sudo/selesai dibaca dari /dev/tty.
 
 set -euo pipefail
 
-# ---- fix: cwd broken (stale PWD di shell lama / direktori dihapus/dipindah) ----
-# bikin semua operasi error "No such file or directory" — termasuk pip install
-# di dalam venv yang diciptakan di cwd broken. Deteksi via subshell sebelum cd:
-#   - `pwd -P` tak bisa resolve → broken
-#   - `[ -d . ]` gagal di cwd yang hilang
-# Paksa ke $HOME & pastikan resolve OK, semua operasi pakai path absolut. ----
+# ---- fix: cwd broken (PWD dihapus/dipindah di shell lama) ----
 if ! (cd "$(pwd -P 2>/dev/null)" 2>/dev/null); then
-  printf 'ERROR: PWD broken (%s di shell ini) — direktori sudah dihapus/dipindah\natau shell lama (tmux/screen). Buka terminal baru, lalu jalankan ulang installer.\n' "${PWD:-unset}" >&2
+  printf 'ERROR: PWD broken (%s) — direktori sudah dihapus/dipindah.\nBuka terminal baru lalu jalankan ulang installer.\n' "${PWD:-unset}" >&2
   exit 1
 fi
-cd "$HOME" 2>/dev/null || { printf 'ERROR: tidak bisa cd ke $HOME — periksa mount/home.\n' >&2; exit 1; }
+cd "$HOME" 2>/dev/null || { printf 'ERROR: tidak bisa cd ke $HOME.\n' >&2; exit 1; }
 
-REPO_URL="${DHYBRID_REPO_URL:-https://github.com/FerzDevZ/dhybrid-agent.git}"
+REPO_URL="${DHYBRID_REPO_URL:-https://github.com/FerizDevZ/dhybrid-agent.git}"
 BRANCH="${DHYBRID_BRANCH:-main}"
 INSTALL_DIR="${DHYBRID_INSTALL_DIR:-$HOME/.dhybrid-agent}"
 BIN_DIR="${DHYBRID_BIN_DIR:-$HOME/.local/bin}"
 USE_UV="${DHYBRID_USE_UV:-0}"
+SKIP_SYS="${DHYBRID_SKIP_SYS:-0}"
 
 # ---- warna (aman non-tty) ----
 if [ -t 1 ]; then
@@ -46,30 +49,117 @@ info() { printf '%s\n' "${C_CYAN}    $*${C_OFF}"; }
 warn() { printf '%s\n' "${C_YELLOW}    $*${C_OFF}"; }
 die()  { printf '%s\n' "${C_RED}ERROR: $*${C_OFF}" >&2; exit 1; }
 
-# ---- prasyarat ----
-command -v git >/dev/null 2>&1 || die "butuh 'git' (sudo apt install git / brew install git)"
-command -v python3 >/dev/null 2>&1 || die "butuh 'python3'"
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' \
-  || die "butuh Python >= 3.12 (punya: $(python3 --version 2>&1))"
+# ---- deteksi distro & package manager ----
+detect_pm() {
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then echo "brew"; return; fi
+  if command -v apt-get >/dev/null 2>&1; then     echo "apt";   return; fi
+  if command -v dnf    >/dev/null 2>&1; then      echo "dnf";   return; fi
+  if command -v yum    >/dev/null 2>&1; then      echo "yum";   return; fi
+  if command -v pacman >/dev/null 2>&1; then      echo "pacman"; return; fi
+  if command -v zypper >/dev/null 2>&1; then      echo "zypper"; return; fi
+  if command -v apk    >/dev/null 2>&1; then      echo "apk";   return; fi
+  echo "unknown"
+}
 
-# ---- optional: uv untuk install lebih cepat ----
+PM="$(detect_pm)"
+OS_ID="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -1 || true)"
+DISTRO_LABEL="${OS_ID:-$(uname -s)}"
+
+# ---- sudo (interaktif via /dev/tty, diam-diam via sudo -n) ----
+run_root() {
+  if [ "$(id -u)" -eq 0 ]; then "$@"; return; fi
+  if [ "${DID_ROOT:-0}" = "1" ]; then die "sudo gagal — paket sistem belum terpasang. Jalankan manual: $*"; fi
+  local args=("$@")
+  if sudo -n "${args[@]}" 2>/dev/null; then return; fi
+  if [ -e /dev/tty ]; then
+    say "Butuh sudo untuk memasang paket sistem ($*)."
+    sudo "${args[@]}"
+    DID_ROOT=1
+  else
+    die "butuh sudo untuk: $* — jalankan installer dari terminal interaktif."
+  fi
+}
+
+# ---- pilih interpreter python >= 3.12 ----
+pick_python() {
+  local c
+  for c in python3.12 python3.13 python3 python3.11; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)' 2>/dev/null; then
+      echo "$c"; return 0
+    fi
+  done
+  return 1
+}
+
+install_system_pkgs() {
+  # dibutuhkan: git + python3 >= 3.12 + python venv/pip. Otomatis per distro.
+  local need_git=0 pyok=0
+  command -v git >/dev/null 2>&1 || need_git=1
+  [ -n "$(pick_python || true)" ] && pyok=1
+
+  if [ "$need_git" = "0" ] && [ "$pyok" = "1" ]; then
+    return 0  # semua ada
+  fi
+
+  if [ "$SKIP_SYS" = "1" ]; then
+    command -v git >/dev/null 2>&1 || die "butuh 'git' (tapi DHYBRID_SKIP_SYS=1 — pasang manual)."
+    [ -n "$(pick_python || true)" ] || die "butuh Python >= 3.12 (tapi DHYBRID_SKIP_SYS=1 — pasang manual)."
+    return 0
+  fi
+
+  say "Mendeteksi distro: ${DISTRO_LABEL} — menyiapkan paket sistem (git, python3.12, venv...)"
+  case "$PM" in
+    apt)
+      run_root apt-get update -qq
+      run_root apt-get install -y -qq git python3 python3-pip python3-venv
+      ;;
+    dnf|yum)
+      run_root "$PM" install -y git python3 python3-pip python3-devel
+      ;;
+    pacman)
+      run_root pacman -Sy --noconfirm git python python-pip python-virtualenv
+      ;;
+    zypper)
+      run_root zypper --non-interactive install git python3 python3-pip python3-virtualenv
+      ;;
+    apk)
+      run_root apk add --no-cache git python3 python3-pip py3-virtualenv
+      ;;
+    brew)
+      command -v brew >/dev/null 2>&1 || die "macOS: butuh Homebrew (https://brew.sh)."
+      brew install git python@3.12 || brew install git python3
+      ;;
+    *)
+      die "Distro '$PM' belum dikenali. Pasang manual: git, python3>=3.12, python3-venv lalu jalankan ulang dengan DHYBRID_SKIP_SYS=1."
+      ;;
+  esac
+}
+
+# ---- main ----
+say "Memasang dhybrid-agent (hemat token, hybrid routing)"
+info "distro    : $DISTRO_LABEL (pkg: $PM)"
+info "repo      : $REPO_URL"
+info "branch    : $BRANCH"
+info "instal di : $INSTALL_DIR"
+
+[ "$SKIP_SYS" = "1" ] && info "skip      : paket sistem (pakai yang sudah ada)"
+
+install_system_pkgs
+
+PY="$(pick_python)" || die "Python >= 3.12 tidak tersedia setelah instalasi paket. Coba jalankan ulang / cek package manager."
+
+# ---- optional: uv ----
 if [ "$USE_UV" = "1" ]; then
   if ! command -v uv >/dev/null 2>&1; then
-    info "uv tidak ditemukan — install uv dulu: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    warn "uv tidak ditemukan — pasang manual: curl -LsSf https://astral.sh/uv/install.sh | sh"
     info "Lanjut dengan pip standar..."
     USE_UV=0
   fi
 fi
 
-# ---- optional: install dev dependencies (default: 1 for full install) ----
 INSTALL_DEV="${DHYBRID_INSTALL_DEV:-1}"
-
-say "Memasang dhybrid-agent (hemat token, hybrid routing)"
-info "repo     : $REPO_URL"
-info "branch   : $BRANCH"
-info "instal di: $INSTALL_DIR"
-[ "$USE_UV" = "1" ] && info "mode     : uv (cepat)"
-[ "$INSTALL_DEV" = "1" ] && info "mode     : full install (dengan dev deps)"
+info "mode      : full install (dev deps)"     ; [ "$INSTALL_DEV" = "1" ] || info "mode      : minimal (tanpa dev deps)"
+[ "$USE_UV" = "1" ] && info "mode      : uv (cepat)"
 
 # ---- clone / update ----
 if [ -d "$INSTALL_DIR/.git" ]; then
@@ -86,7 +176,14 @@ fi
 
 # ---- venv + dependensi ----
 say "Menyiapkan venv & dependensi (sekali saja, ~30 detik)..."
-python3 -m venv "$INSTALL_DIR/.venv"
+if [ ! -x "$INSTALL_DIR/.venv/bin/python" ]; then
+  "$PY" -m venv "$INSTALL_DIR/.venv" 2>/dev/null \
+    || { "$PY" -m pip install --quiet --user virtualenv >/dev/null 2>&1 \
+         && "$PY" -m virtualenv "$INSTALL_DIR/.venv" >/dev/null 2>&1; } \
+    || die "gagal membuat venv — pasang python3-venv secara manual untuk distro Anda, lalu jalankan ulang installer."
+else
+  info "venv sudah ada — dipakai ulang."
+fi
 
 if [ "$USE_UV" = "1" ]; then
   say "Menggunakan uv untuk install dependensi (lebih cepat)..."
@@ -116,13 +213,11 @@ if [ "${DHYBRID_SKIP_ENV:-0}" != "1" ] && [ ! -f "$INSTALL_DIR/.env" ] && [ -f "
   info ".env dibuat — isi API key-mu: $INSTALL_DIR/.env"
 fi
 
-# ---- auto-check tools untuk suggerensi stack default ----
+# ---- auto-check tools untuk sugges stack default ----
 say "Mengecek tools development..."
 AVAILABLE_TOOLS=""
-for cmd in php composer node npm python3 pip3 go cargo dotnet java mvn gradle; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-        AVAILABLE_TOOLS="$AVAILABLE_TOOLS $cmd"
-    fi
+for cmd in php composer node npm python3 pip3 uv go cargo dotnet java mvn gradle docker; do
+    command -v "$cmd" >/dev/null 2>&1 && AVAILABLE_TOOLS="$AVAILABLE_TOOLS $cmd"
 done
 if [ -n "$AVAILABLE_TOOLS" ]; then
     info "Tools tersedia:$AVAILABLE_TOOLS"
@@ -151,13 +246,11 @@ if [ -f "$HOME/.zshrc" ] && ! grep -q "dhybrid-completion" "$HOME/.zshrc" 2>/dev
   info "completion zsh ditambahkan ke ~/.zshrc"
 fi
 
-# ---- interaktif: tawarkan menjalankan dhybrid langsung ----
-# Deteksi interaktif: pakai /dev/tty jika tersedia, atau stdout terminal
-# Saat dipipe (curl | bash), stdin bukan tty tapi /dev/tty masih bisa dibaca
+# ---- interaktif: tawarkan menjalankan dhybrid sekarang ----
 if [ -e /dev/tty ]; then
   printf '\n%s=== Instalasi selesai! ===%s\n' "$C_BOLD" "$C_OFF" >/dev/tty
   printf 'Mau coba dhybrid sekarang? (Y/n) ' >/dev/tty
-  read -r REPLY </dev/tty
+  read -r REPLY </dev/tty || REPLY=""
   if [[ -z "$REPLY" || "$REPLY" =~ ^[Yy]$ ]]; then
     say "Menjalankan dhybrid repl..."
     exec "$BIN_DIR/dhybrid" repl
@@ -167,7 +260,6 @@ if [ -e /dev/tty ]; then
     info "atau buka terminal baru, lalu: dhybrid repl"
   fi
 else
-  # non-interaktif (pipe, CI, dll) - tidak ada /dev/tty
   say "${C_BOLD}Selesai!${C_OFF}"
   info "jalankan sekarang : $BIN_DIR/dhybrid repl"
   info "atau buka terminal baru, lalu: dhybrid repl"
