@@ -261,10 +261,17 @@ def _repl_prompt(ctx, pt_session, kb=None) -> str:
     pt_session.completer = FuzzyCompleter(
         WordCompleter(sorted(set(words)), ignore_case=True)
     )
-    mode = getattr(ctx, "mode", BUILD)
-    color = "ansiyellow" if mode == PLAN else "ansigreen"
     return pt_session.prompt(
-        [(color, f"[{MODE_LABEL[mode]}] dhybrid> ")],
+        # message = callable → dievaluasi TIAP render, jadi ganti mode via Tab
+        # langsung terlihat realtime (label [PLAN]/[BUILD] ikut berubah, bukan
+        # nunggu prompt berikutnya). Baca ctx.mode langsung (bukan closure lama)
+        # supaya Tab flip terlihat seketika.
+        lambda: [
+            (
+                "ansiyellow" if getattr(ctx, "mode", BUILD) == PLAN else "ansigreen",
+                f"[{MODE_LABEL.get(getattr(ctx, 'mode', BUILD), 'BUILD')}] dhybrid> ",
+            )
+        ],
         key_bindings=kb,
         bottom_toolbar=lambda: _status_line(ctx),
     ).strip()

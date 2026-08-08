@@ -83,6 +83,14 @@ _TOOL_GROUPS: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
         frozenset({"codegen_openapi", "codegen_graphql", "codegen_protobuf"}),
         ("openapi", "swagger", "graphql", "protobuf"),
     ),
+    "repo": (
+        frozenset({"repo_issue", "repo_issues", "repo_pr"}),
+        ("issue", "pull request", "pull-request", "pr github", "repo github", "github issue", "gitlab issue"),
+    ),
+    "scaffold": (
+        frozenset({"scaffold"}),
+        ("scaffold", "struktur proyek", "buat proyek", "inisialisasi proyek", "boilerplate"),
+    ),
     "ci_cd": (frozenset({"ci_cd"}), ("ci/cd", "pipeline", "deploy")),
     "vision": (frozenset({"read_image"}), ("gambar", "image", "screenshot", "foto")),
     "explore": (

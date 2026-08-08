@@ -35,6 +35,28 @@ def test_spec_text_for_jit_subset():
     assert "git_commit" not in with_java
 
 
+def test_jit_repo_scaffold_groups(tmp_path):
+    """Regresi: repo_issue/repo_pr/scaffold dulu ORPHAN — terdaftar tapi tak
+    pernah di-inject JIT (agent tidak pernah bisa memanggil). Pastikan keyword
+    memicu grup repo & scaffold."""
+    from pathlib import Path
+
+    from dhybrid.config import Config
+    from dhybrid.tools import build_tools
+
+    cfg = Config.load("config/default.yaml")
+    cfg.workspace = Path(tmp_path)
+    reg = build_tools(cfg, client_factory=lambda: None, base_dir=str(tmp_path))
+
+    t = reg.spec_text_for("tolong buatkan issue github untuk bug ini")
+    assert "repo_issue" in t and "repo_pr" in t
+    t2 = reg.spec_text_for("buat struktur proyek dari template")
+    assert "scaffold" in t2
+    # tanpa keyword: tidak ikut (hemat token)
+    t3 = reg.spec_text_for("halo")
+    assert "repo_issue" not in t3 and "scaffold" not in t3
+
+
 def test_execute_error_handling():
     reg = ToolRegistry()
 
