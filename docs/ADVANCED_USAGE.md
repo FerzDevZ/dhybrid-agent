@@ -68,7 +68,7 @@ author: your-name
 
 ### Skill with Parameters
 
-For skills that accept parameters, document them in the frontmatter:
+Untuk skill yang menerima parameter, dokumentasikan di frontmatter:
 
 ```markdown
 ---
@@ -89,12 +89,12 @@ params:
 
 ## Auto-Skill Customization
 
-### Disable Auto-Learn for Specific Tasks
+### Disable Auto-Learn untuk Task Spesifik
 
 ```python
-# In your session context
+# Di dalam konteks sesi
 ctx.cfg.skills["auto_learn"] = False
-# Or via environment
+# Atau via env
 # DHYBRID_NO_SKILL=1
 ```
 
@@ -103,7 +103,7 @@ ctx.cfg.skills["auto_learn"] = False
 ```python
 from dhybrid.skills.loader import slugify
 
-# Override naming for specific patterns
+# Override naming untuk pattern tertentu
 def custom_slugify(goal: str) -> str:
     if "deploy" in goal.lower():
         return f"deploy-{slugify(goal)}"
@@ -112,17 +112,18 @@ def custom_slugify(goal: str) -> str:
 
 ### Skill Templates
 
-Create reusable templates in `~/.dhybrid/skills/templates/`:
+Buat template reuse di `~/.dhybrid/skills/templates/`:
 
 ```
 templates/
 ├── api_endpoint.py      # FastAPI endpoint template
 ├── react_component.tsx  # React component template
-├── k8s_deployment.yaml  # K8s deployment template
+├── k8s_deployment.yaml  # K8s deploy template
 └── dockerfile           # Multi-stage Dockerfile
 ```
 
-Reference in skills:
+Referensi di skill:
+
 ```markdown
 **Template:** `templates/api_endpoint.py`
 ```
@@ -132,7 +133,7 @@ Reference in skills:
 ### Episodic Memory Queries
 
 ```python
-# Search with specific filters
+# Cari dengan filter spesifik
 from dhybrid.session.episodic_memory import EpisodicMemory
 
 memory = EpisodicMemory(db_path)
@@ -146,7 +147,7 @@ results = memory.search(
 ### Memory Namespaces
 
 ```python
-# Separate memories by project/team
+# Pisahkan memori per project/team
 project_memory = MemoryStore(
     Path.home() / ".dhybrid" / "projects" / "my-project" / "memory.sqlite"
 )
@@ -158,11 +159,11 @@ team_memory = MemoryStore(
 ### Memory Retention Policies
 
 ```yaml
-# In config
+# Di config
 memory:
   retention_days: 90
   max_entries: 10000
-  auto_cleanup: true
+  auto_attend: true
 ```
 
 ## Custom Tool Development
@@ -193,7 +194,7 @@ def register(reg: ToolRegistry, max_chars: int = 8000):
 ### Register Custom Tool
 
 ```python
-# In dhybrid/tools/__init__.py
+# Di dhybrid/tools/__init__.py
 from dhybrid.tools import my_tool
 
 def build_tools(cfg, ...):
@@ -201,16 +202,17 @@ def build_tools(cfg, ...):
     my_tool.register(reg, max_chars=max_chars)
 ```
 
-### Tool with External Dependencies
+### Tool dengan External Dependencies
 
 ```python
 def external_api_tool(endpoint: str, api_key: str = "") -> str:
     """Call external API."""
     import os
+
     key = api_key or os.environ.get("MY_API_KEY")
     if not key:
         return "ERROR: API key required"
-    
+
     import requests
     resp = requests.get(endpoint, headers={"Authorization": f"Bearer {key}"})
     return resp.text
@@ -253,7 +255,7 @@ jobs:
 ### Scheduled Tasks
 
 ```python
-# cron job for daily code quality
+# cron job untuk daily code quality
 from dhybrid.cron import create_daily_review
 
 create_daily_review(
@@ -268,12 +270,12 @@ create_daily_review(
 ### Token Budget Tuning
 
 ```yaml
-# Aggressive compaction for cost savings
+# Compact lebih agresif untuk hemat biaya
 budget:
   soft: 30000    # Compact earlier
   hard: 60000    # Hard stop sooner
 
-# Or generous for quality
+# Atau longgar demi kualitas
 budget:
   soft: 100000
   hard: 200000
@@ -292,13 +294,13 @@ context:
 ```yaml
 skills:
   max_inject: 2       # Fewer skills = fewer tokens
-  max_chars: 500      # Truncate skill bodies
+  max_chars: 500      # Buffer skill bodies
 ```
 
 ### Model Selection Strategy
 
 ```yaml
-# Use cheap model for most tasks
+# Pakai model murah untuk kebanyakan task
 model:
   provider: openai
   model: gpt-4o-mini
@@ -308,7 +310,7 @@ model:
     - anthropic-big   # Final escalation
 ```
 
-## Security Hardening
+## Security Foundation
 
 ### Allowlist Only
 
@@ -321,19 +323,19 @@ tool:
 ### Confirmation Required
 
 ```bash
-# Interactive mode (default) - confirms dangerous commands
+# Interactive mode (default) - confirm dangerous commands
 dhybrid repl
 
-# Non-interactive - auto-confirm (CI/CD)
+# Non-interactive - auto-confirm (switching Q: apakah aman?)
 dhybrid repl --yes
 ```
 
 ### Workspace Isolation
 
 ```yaml
-# Restrict to project directory only
+# Batasi ke direktori project saja
 workspace: ./project
-# Agent cannot access files outside
+# Agent tidak bisa until di luar folder
 ```
 
 ## Debugging & Profiling
@@ -344,7 +346,7 @@ workspace: ./project
 # Full debug output
 DHYBRID_DEBUG=1 dhybrid repl
 
-# Debug specific component
+# Debug spesific component
 DHYBRID_DEBUG=tools dhybrid repl
 DHYBRID_DEBUG=skills dhybrid repl
 ```
@@ -352,7 +354,7 @@ DHYBRID_DEBUG=skills dhybrid repl
 ### Profiling
 
 ```python
-# Profile agent loop
+# Profil agent loop
 import cProfile
 import pstats
 
@@ -370,7 +372,7 @@ stats.print_stats(20)
 ### Token Usage Analysis
 
 ```bash
-# View token breakdown
+# Lihat breakdown token
 dhybrid run "analyze token usage for last 10 sessions" --format json
 ```
 
@@ -400,7 +402,7 @@ dhybrid run "analyze token usage for last 10 sessions" --format json
 }
 ```
 
-### Language Server Protocol
+### LSP Integration
 
 ```python
 # Custom LSP integration
@@ -436,30 +438,30 @@ from dhybrid.llm.base import BaseProvider, ChatMessage
 class CustomProvider(BaseProvider):
     def __init__(self, config):
         super().__init__(config)
-    
+
     async def chat(self, messages, **kwargs):
         # Custom API call
         return response
 ```
 
-Register in `dhybrid/llm/registry.py`.
+Register di `dhybrid/llm/registry.py`.
 
 ### Custom Quality Scorer
 
 ```python
 # dhybrid/agent/quality.py
 def custom_quality_score(text: str, context: dict) -> int:
-    """Score 0-100 based on custom criteria."""
+    """Score 0-100 berdasarkan kriteria custom."""
     score = 100
-    
-    # Penalize TODO/FIXME
+
+    # Penalty TODO/FIXME
     if "TODO" in text or "FIXME" in text:
         score -= 10
-    
+
     # Reward tests
     if "def test_" in text:
         score += 5
-    
+
     return max(0, min(100, score))
 ```
 
@@ -471,11 +473,11 @@ class CustomHook:
     def on_step(self, step, model, usage, budget):
         # Log to custom system
         pass
-    
+
     def on_tool_call(self, tool, args, result):
         # Audit trail
         pass
-    
+
     def on_escalation(self, from_model, to_model, reason):
         # Alert on escalation
         pass
@@ -483,11 +485,12 @@ class CustomHook:
 
 ## Best Practices
 
-### 1. Keep Skills Focused
-- One skill = one clear workflow
-- Compose complex workflows from simple skills
+### 1. Jaga Skill Fokus
+- Satu skill = satu workflow jelas
+- Komposisi workflow kompleks dari skill sederhana
 
-### 2. Version Your Skills
+### 2. Version Skills Anda
+
 ```markdown
 ---
 name: my-skill
@@ -495,17 +498,20 @@ version: 1.2.0
 ---
 ```
 
-### 3. Document Edge Cases
-- What happens when dependencies missing?
-- How to handle partial failures?
+### 3. Dokumentasi Edge Cases
 
-### 4. Test Your Skills
+- Apa yang terjadi ketika dependency hilang?
+- Bagaimana handle partial failure?
+
+### 4. Test Skills Anda
+
 ```bash
-# Test skill in isolation
-dhybrid run "use skill my-skill to deploy staging"
+# Test skill terisolasi
+dhybrid run "gunakan skill my-skill untuk deploy staging"
 ```
 
 ### 5. Share via Marketplace
+
 ```bash
 # Export
 dhybrid skill export my-skill my-skill.json
@@ -516,20 +522,20 @@ dhybrid skill import my-skill.json
 
 ## Migration Guide
 
-### From v0.8 to v0.9+
+### Dari v0.8 ke v0.9+
 
-Key changes:
-- `skills.auto_learn` now defaults to `true`
-- New `episodic_memory` module (optional)
-- `tool.allowlist` required for new tools
-- Config now supports `extra` field for custom settings
+Perubahan kunci:
+
+- `skills.auto_learn` kini default `true`
+- Modul `episodic_memory` baru (opsional)
+- `tool.allowlist` wajib untuk tool baru
+- Config mendukung field default `extra` untuk custom
 
 ```bash
-# Migration steps
-1. Update config.yaml with new structure
-2. Reinstall: pip install -e . --upgrade
-3. Run: dhybrid self-update
-4. Test: dhybrid doctor
+# Langkah migrasi
+dhybrid self-update       # 1. update tool
+dhybrid doctor            # 2. cek kesehatan
+config: tambahkan        # 3. update config Anda
 ```
 
 ## Resources

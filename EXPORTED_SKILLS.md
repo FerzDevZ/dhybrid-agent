@@ -1,7 +1,7 @@
-# DHYBRID SKILL EXPORT
-**Exported at:** 2026-08-03  
-**Source:** dhybrid-agent/skills/  
-**Format:** Professional Markdown
+# Ekspor Skill dhybrid-agent
+
+Dikonversi: 2026-08-03  
+Sumber: `dhybrid-agent/skills/`
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-**dhybrid-agent** is a powerful, token-efficient CLI coding agent built with a hybrid LLM routing architecture. It combines the best of both worlds: fast/cheap models for simple tasks and powerful models for complex reasoning — with automatic escalation when quality drops.
+**dhybrid-agent** adalah CLI coding agent berbasis Python, terkoordinasi levat routing LLM hybrid. Model kecil murah untuk task simpel, model besar untuk reasoning kompleks, dengan escalation otomatis saat kualitas output turun.
 
 ## Key Features
 
@@ -21,12 +21,12 @@
 
 ```bash
 # Clone and setup
-git clone https://github.com/your-org/dhybrid-agent
+git clone https://github.com/FerzDevZ/dhybrid-agent
 cd dhybrid-agent
 pip install -e .
 
-# Or install from pip
-pip install dhybrid-agent
+# Atau via installer resmi
+curl -fsSL https://raw.githubusercontent.com/FerzDevZ/dhybrid-agent/main/install.sh | bash
 ```
 
 ## Quick Start
@@ -45,28 +45,24 @@ dhybrid doctor
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    dhybrid-agent                          │
-├─────────────────────────────────────────────────────────┤
-│  REPL / CLI                                              │
-├─────────────────────────────────────────────────────────┤
-│  Agent Loop (ReAct)                                     │
-│  ├── Hybrid Router (quality-based escalation)           │
-│  ├── Tool Registry (70+ tools)                          │
-│  ├── Skills System (auto-learn + marketplace)           │
-│  ├── Memory (episodic + vector search)                  │
-│  └── Reasoning Traces / Self-Critique                   │
-├─────────────────────────────────────────────────────────┤
-│  Observability                                          │
-│  ├── Prometheus Metrics (/metrics endpoint)             │
-│  ├── OpenTelemetry Tracing (OTLP export)                │
-│  └── Structured Logging                                 │
-└─────────────────────────────────────────────────────────┘
+CLI / REPL
+└── Agent Loop (ReAct)
+    ├── Hybrid Router (quality-based escalation)
+    ├── Tool Registry (70+ tools)
+    ├── Skills Engine (auto-learn + marketplace)
+    ├── Memory (episodic + vector search)
+    └── Reasoning Traces / Self-Critique
+
+Observability
+├── Prometheus Metrics (/metrics endpoint)
+├── OpenTelemetry Tracing (OTLP export)
+└── Structured Logging
 ```
 
 ## Configuration
 
-### Config File Location
+### Structured Location
+
 - Project: `config/default.yaml`
 - User: `~/.dhybrid/config.yaml` (overrides project)
 - Environment variables (highest priority)
@@ -77,17 +73,20 @@ dhybrid doctor
 # Model Configuration
 model:
   provider: openai
-  model: laguna-s-2.1-free
-  base_url: https://opencode.ai/zen/v1
-  api_key_env: OPENCODE_ZEN_API_KEY
-  chain: ["bynara-big", "openrouter-big", "anthropic-big"]
+  model: gpt-4o
+  base_url: https://api.openai.com/v1
+  api_key_env: OPENAI_API_KEY
+  chain:
+    - bynara-big      # First escalation
+    - openrouter-big  # Second escalation
+    - anthropic-big   # Final escalation
 
-# Budget Limits
+# Budget
 budget:
   soft: 60000    # trigger compaction
-  hard: 120000   # force stop
+  hard: 120000   # hard stop
 
-# Tool Settings
+# Tools
 tool:
   max_output_chars: 8000
   allowlist: [terminal, write_file, go_test, cargo_test, ...]
@@ -119,61 +118,72 @@ DHYBRID_DEBUG=1
 ## Available Tools
 
 ### Core Tools
+
 - `terminal` — Execute shell commands
 - `read_file` / `write_file` / `apply_patch` — File operations
 - `grep` / `find_files` — Search
 - `git_*` — Git operations
+- `run_tests` — Run tests (pytest, etc.)
 
 ### Language-Specific Tools
 
 **Go** (7 tools)
+
 ```bash
 go_test, go_vet, go_fmt, go_build, go_mod_tidy, golangci_lint, gosec
 ```
 
 **Rust** (8 tools)
+
 ```bash
-cargo_test, cargo_build, cargo_check, cargo_fmt, 
+cargo_test, cargo_build, cargo_check, cargo_fmt,
 cargo_clippy, cargo_audit, cargo_update, cargo_outdated
 ```
 
 **TypeScript/Node** (9 tools)
+
 ```bash
 npm_test, npm_build, npm_install, npm_audit,
 tsc_check, eslint_check, jest_test, vitest_test, prettier_fmt
 ```
 
 **Java/Maven/Gradle** (10 tools)
+
 ```bash
 mvn_test, mvn_build, mvn_compile, mvn_package, mvn_clean,
 gradle_test, gradle_build, gradle_check, spotbugs_check, checkstyle_check
 ```
 
 **C#/.NET** (9 tools)
+
 ```bash
 dotnet_test, dotnet_build, dotnet_restore, dotnet_clean,
 dotnet_fmt, dotnet_format, dotnet_tool_install, dotnet_outdated, dotnet_ef_migrations
 ```
 
 ### Advanced Tools
+
 - `orchestrator` — Multi-agent task orchestration
-- `codegen_openapi` / `codegen_graphql` / `codegen_protobuf` — Generate code from specs
+- `codegen_openapi` / `codegen_graphql` / `codegen_protobuf` — Generate code dari spec
 - `ci_cd` — Generate GitHub Actions / GitLab CI
 - `episodic_remember` / `episodic_recall` — Persistent memory
 - `semantic_search` — Vector-based code search
+- `tdd_status` — TDD status (RED/GREEN/REFACTOR)
 
 ## Skills System
 
 ### Auto-Skill Learning
-The agent automatically creates skills from successful sessions:
+
+Sistem otomatis membuat skill dari sesi yang sukses:
 
 ```bash
-# User: "buat halaman login dengan validasi"
-# Agent executes: terminal, write_file, run_tests
-# Result: Creates skill "buat-halaman-login" 
+# User: "buat halaman login yang valid"
+# Agent executes: write_file, run_tests
+# Result: Creates skill "buat-halaman-login"
 ```
 
 ### Manual Skill Creation
+
 ```markdown
 # ~/.dhybrid/skills/my-skill/SKILL.md
 ---
@@ -189,53 +199,54 @@ description: Custom skill for my workflow
 ```
 
 ### Skill Marketplace
+
 ```python
 from dhybrid.skills import export_skill, import_skill, publish_skill, install_skill
 
-# Export skill to share
+# Make skill shareable
 export_skill("~/.dhybrid/skills", "my-skill", "my-skill.json")
 
 # Import skill
 import_skill("~/.dhybrid/skills", "my-skill.json")
 
-# Publish to marketplace
+# Publish ke marketplace
 publish_skill("~/.dhybrid/skills", "my-skill", "~/marketplace")
 
-# Install from marketplace
+# Install dari marketplace
 install_skill("~/.dhybrid/skills", "~/marketplace", "other-skill")
 ```
 
 ### Skill Composition
+
 ```python
 from dhybrid.skills import compose_skills, Skill
 
 workflow = compose_skills([
     Skill(name="setup", description="Setup project", body="..."),
-    Skill(name="test", description="Run tests", body="..."),
+    Skill(name="test", description="Jalankan test", body="..."),
     Skill(name="deploy", description="Deploy", body="..."),
 ], name="ci-workflow", description="Complete CI pipeline")
-
-# Use composed skill
 ```
 
 ## Multi-Agent Orchestration
 
-The orchestrator decomposes complex tasks into specialized subagents:
+Orchestrator memecah task kompleks menjadi subagent khusus:
 
 ```bash
 # User: "refactor authentication module"
-# Agent creates: planner → executor → reviewer subagents
-# Each with role-specific prompts
+# Agent creates: planner → executer → reviewer subagents
 ```
 
 ### Roles
-- **Planner** — Breaks task into subtasks
-- **Executor** — Implements each subtask
-- **Reviewer** — Reviews code quality
+
+- **Planner** — Memecah task jadi subtask
+- **Executor** — Mengimplementasi tiap subtask
+- **Reviewer** — Menilai kualitas code
 
 ## Code Generation
 
-### From OpenAPI (FastAPI)
+### OpenAPI → FastAPI
+
 ```python
 from dhybrid.tools.codegen import generate_from_openapi
 
@@ -251,7 +262,8 @@ spec = {
 code = generate_from_openapi(spec, framework="fastapi")
 ```
 
-### From GraphQL (Strawberry)
+### GraphQL → Strawberry
+
 ```python
 from dhybrid.tools.codegen import generate_from_graphql
 
@@ -262,7 +274,8 @@ type Query { users: [User!]! }
 code = generate_from_graphql(schema)
 ```
 
-### From Protobuf (gRPC)
+### Protobuf → gRPC
+
 ```python
 from dhybrid.tools.codegen import generate_from_protobuf
 
@@ -275,7 +288,7 @@ code = generate_from_protobuf(proto)
 
 ## Database Migrations
 
-Auto-generate Alembic-compatible migrations:
+Auto-generate migration kompatibel Alembic:
 
 ```python
 from dhybrid.tools.db_migrate import create_migration, generate_add_table_migration
@@ -284,11 +297,14 @@ from dhybrid.tools.db_migrate import create_migration, generate_add_table_migrat
 migration = create_migration("add_users_table")
 
 # Generate table migration
-migration = generate_add_table_migration("users", [
+migration = create_migration_(
+  "users",
+  [
     {"name": "id", "type": "INTEGER", "primary_key": True},
     {"name": "email", "type": "VARCHAR(255)", "unique": True},
     {"name": "created_at", "type": "TIMESTAMP", "default": "CURRENT_TIMESTAMP"}
-])
+  ]
+)
 ```
 
 ## CI/CD Generation
@@ -317,14 +333,16 @@ gitlab_ci = generate_gitlab_ci(
 ## Observability
 
 ### Prometheus Metrics
+
 ```python
 from dhybrid.efficiency.prometheus_exporter import start_metrics_server
 
-# Start /metrics endpoint
+# Expose /metrics
 server = start_metrics_server(port=9090)
 ```
 
 **Available Metrics:**
+
 - `dhybrid_tokens_used_total` — Total tokens consumed
 - `dhybrid_quality_score` — Output quality (0-100)
 - `dhybrid_tool_calls_total` — Tool invocation count
@@ -332,22 +350,25 @@ server = start_metrics_server(port=9090)
 - `dhybrid_session_duration_seconds` — Session duration
 
 ### OpenTelemetry Tracing
+
 ```python
 from dhybrid.efficiency.tracing import init_tracing
 
-# Initialize with OTLP endpoint
+# Inisialisasi dengan OTLP endpoint
 tracer = init_tracing(
     service_name="dhybrid-agent",
     otlp_endpoint="http://jaeger:4317"
 )
 
-# Use in code
+# Usage:
 with tracer.start_span("database.query") as span:
     span.set_attribute("query", "SELECT * FROM users")
 ```
 
 ### Grafana Dashboard
-Import the pre-built dashboard from `docs/grafana-dashboard.json` for:
+
+Import predefined dashboard dari `docs/grafana-dashboard.json` untuk:
+
 - Token usage trends
 - Quality score distribution
 - Tool usage heatmap
@@ -357,6 +378,7 @@ Import the pre-built dashboard from `docs/grafana-dashboard.json` for:
 ## Deployment
 
 ### Docker
+
 ```dockerfile
 FROM python:3.12-slim
 WORKDIR /app
@@ -366,6 +388,7 @@ ENTRYPOINT ["dhybrid"]
 ```
 
 ### Kubernetes
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -386,6 +409,7 @@ spec:
 ```
 
 ### Systemd Service
+
 ```ini
 [Unit]
 Description=dhybrid-agent
@@ -402,85 +426,90 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-## Advanced Usage
+## Tips
 
 ### Custom Models
+
 ```bash
 # Pilih preset saat menjalankan (tanpa perlu config)
 dhybrid --model anthropic-big repl
 dhybrid --model gemini-fast repl
-dhybrid --list-presets            # lihat semua preset
+dhybrid --list-presets            # semua preset
 
 # Atau set model dari dalam REPL
 #   /model <nama>   → ganti model utama
 #   /settings       → pilih/input provider manual
 ```
 
-### Disable Features
+### Disable
+
 ```bash
-# Disable auto-skill learning (via env var, atau skills.auto_learn=false di config)
+# Disable auto-skill learning (via env var, atau config skills.auto_learn=false)
 DHYBRID_NO_SKILL=1
 
 # Disable telemetry
 DHYBRID_NO_TELEMETRY=1
 ```
 
-### Debugging
+### Debug
+
 ```bash
-# Enable debug output
+# Debug output on
 DHYBRID_DEBUG=1 dhybrid repl
 
-# View reasoning traces
-# Available in LoopResult.reasoning_trace
+# Reasoning trace
+# Tersedia di LoopResult.reasoning_trace
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-**Model not found / 401 error**
+**Model tidak ditemukan / 401**
+
 ```bash
 # Check API key
 echo $OPENAI_API_KEY
-# Set via /key saat REPL, atau env var; atau ganti provider: /model <nama>
+# /key saat REPL, atau env var; atau ganti provider: /model <nama>
 ```
 
-**Tools not available**
+**Tools tidak tersedia**
+
 ```bash
-# Cek kesehatan & allowlist
+# Health check
 dhybrid doctor
 # Tambah tool ke tool.allowlist di config/default.yaml
-# (regenerasi allowlist otomatis saat restart; pastikan tool terdaftar di registry)
+# (regenerate auto saat restart; pastikan tool terdaftar di registry)
 ```
 
-**Memory not persisting**
+**Memory tidak persisten**
+
 ```bash
-# Pastikan memakai direktori proyek yang sama
+# Gunakan direktori proyek yang sama
 cd /your/project && dhybrid repl
 # Data tersimpan di workspace .dhybrid/ proyek tsb (memory.sqlite, sessions.sqlite)
 ```
 
-**Episodic memory failing**
+**Episodic memory error / tidak bekerja**
+
 ```bash
 # Install sentence-transformers
 pip install sentence-transformers
-# Or use offline mode
+# Atau pakai offline mode
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing`
-3. Write tests: `pytest tests/unit/ -x`
-4. Run integration tests: `pytest tests/integration/ -x`
-5. Submit PR
+1. Fork repository
+2. Buat branch pipit: `git checkout -b feature/amazing`
+3. Tulis test: `pytest tests/unit/ -x`
+4. Jalankan integrasi: `pytest tests/integration/ -x`
+5. Kirim PR
 
 ## License
 
-MIT License — see LICENSE file for details.
+MIT License — lihat LICENSE file untuk detail.
 
 ## Support
 
-- Documentation: https://dhybrid-agent.readthedocs.io
-- Issues: https://github.com/your-org/dhybrid-agent/issues
-- Discord: https://discord.gg/dhybrid
+- GitHub Issues: https://github.com/FerzDevZ/dhybrid-agent/issues

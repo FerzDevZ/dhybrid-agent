@@ -1,542 +1,279 @@
-<div align="center">
+# dhybrid-agent
 
-<!-- ═══════════════════════════════════════════════════════════════
-     HERO SECTION — 3D Modern AI Agent Branding
-     ═══════════════════════════════════════════════════════════════ -->
+CLI coding agent dengan hybrid routing. Tugas mekanis dikerjakan model murah, tugas penalaran dinaikkan ke model besar. Seluruh data tersimpan lokal di `~/.dhybrid/` — tidak ada server, tidak ada telemetri.
 
-<img src="https://img.shields.io/badge/CI-Passing-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white" alt="CI" />
-<img src="https://img.shields.io/badge/Version-0.9.6-black?style=for-the-badge&logo=python&logoColor=white" alt="Version" />
-<img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License" />
-<img src="https://img.shields.io/badge/Python-3.12+-yellow?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+```
+pip install dhybrid-agent   # atau lihat bagian Instalasi
+dhybrid repl
+```
 
-<br/>
-<br/>
-
-<h1 style="font-size: 3.5em; font-weight: 900; letter-spacing: 4px; margin: 0;
-  background: linear-gradient(135deg, #000000 0%, #434343 25%, #000000 50%, #434343 75%, #000000 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-  🦞 DHYBRID-AGENT
-</h1>
-
-<p style="font-size: 1.15em; color: #555; margin-top: 8px; font-weight: 500; letter-spacing: 1px;">
-  Hybrid AI Coding Agent — Powerful & Token-Efficient
-</p>
-
-<p style="font-size: 1em; color: #777; max-width: 680px; margin: 12px auto 0;">
-  <strong>Local-first</strong>, tanpa server. Tugas mekanis dikerjakan model murah,
-  tugas penalaran dikerjakan model besar.
-  Dirancang seperti <em>Hermes Agent</em> & <em>OpenClaw</em> — skills, memory, sessions.
-</p>
-
-<br/>
-
-<a href="https://github.com/FerzDevZ/dhybrid-agent">
-  <img src="https://komarev.com/ghpvc/?username=FerzDevZ&label=PROFILE+VIEWS&color=000000&style=flat-square" alt="Profile Views" />
-</a>
-
-<br/>
-<br/>
-
-<!-- 3D Separator Line -->
-<div style="background: linear-gradient(90deg, transparent, #000, transparent); height: 2px; width: 60%; margin: 0 auto; border-radius: 1px; box-shadow: 0 1px 6px rgba(0,0,0,0.3);"></div>
-
-</div>
-
-<br/>
+- **Bahasa**: Python ≥3.12
+- **Lisensi**: MIT
+- **Status**: Beta (Development Status 4)
 
 ---
 
-<br/>
+## Ringkasan
 
-<!-- ═══════════════════════════════════════════════════════════════
-     FEATURES — 3D Card Grid
-     ═══════════════════════════════════════════════════════════════ -->
+dhybrid-agent adalah satu program `dhybrid` yang berjalan di terminal. Anda memberi perintah, agent memutuskan sendiri langkahnya: membaca file, menjalankan perintah, mengedit kode, menjalankan test, hingga membuat Issue/PR. Setiap keputusan dicatat; setiap tool dikontrol izin.
 
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">F E A T U R E S</h2>
-</div>
+Yang membedakan dari chatbot biasa:
 
-<br/>
+- **Hybrid routing.** Satu loop agent memilih model per langkah. Operasi biasa (lari test, baca file, edit kecil) dipakai model cepat/murah; langkah "berat" (perencanaan, debug rumit, rencana arsitektur) dinaikkan ke model besar. Jika jawaban model kecil diragukan, biaya default langsung escalation.
+- **Kontrol token.** Konteks lama dipadatkan (bukan dibuang), prompt caching aktif di provider yang mendukung, output tool dibatasi, cache semantik pada hasil pencarian. Semua biaya terukur lewat `/tokens`.
+- **Mode plan/build.** Default `build`. Dengan `plan`, agent hanya boleh membaca — semua tool mutasi (tulis file, patch, git commit, buat Issue/PR) diblokir, dan terminal dibatasi perintah read-only.
+- **Izin eksplisit.** Eskalasi ke model yang lebih besar harus Anda setujui (default `ask`). Mode NON-interaktif otomatis menolak (fail-safe).
 
-<table width="100%" cellpadding="0" cellspacing="0" style="border: none;">
-<tr>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">🤖 Hybrid Router</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">Satu model utama yang bisa diganti kapan saja via <code>/settings</code>. Router hybrid otomatis mengirim tugas mekanis ke model murah, tugas penalaran ke model besar.</p>
-  </div>
-</td>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">💰 12 Teknik Hemat Token</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">Lazy policies, context compaction, prompt caching (Anthropic cache_control), tool output cap, diff-based edit, semantic cache, early-stop, dan banyak lagi.</p>
-  </div>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">☁️ Multi-Provider Cloud</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">OpenAI, Anthropic, OpenRouter, Gemini, Groq, DeepSeek, byNara. Satu adaptor OpenAI-compatible + adaptor Anthropic native. Route gratis opencode-zen & byNara.</p>
-  </div>
-</td>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">🛠️ 70+ Tools</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">Terminal, read/write, apply_patch diff, grep/find, git, pytest, TDD, todo, memory (FTS5), subagent, web, browser (Playwright), code_map, power tools.</p>
-  </div>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">🧠 Auto-Skill & Learning</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">33 built-in skills + auto-learn dari Q&A berulang. Clarify cerdas untuk prompt ambigu. Skill marketplace untuk publish, search, import/export.</p>
-  </div>
-</td>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">👁️ Vision & Paste</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">Agent bisa MELIHAT gambar & screenshot. <code>read_image</code>, <code>/shot</code>, <code>/pasteshot</code> (clipboard), <code>/paste</code> — semua masuk konteks agent.</p>
-  </div>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">💾 Sesi & Memori</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">SQLite local di <code>~/.dhybrid/</code>. Resume sesi via ringkasan, dashboard token & biaya. Memori jangka panjang (FTS5 + sqlite-vec) per proyek.</p>
-  </div>
-</td>
-<td width="50%" valign="top" style="padding: 12px;">
-  <div style="background: linear-gradient(145deg, #f8f8f8, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 24px; box-shadow: 4px 4px 12px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9); transition: all 0.3s;">
-    <h3 style="margin: 0 0 8px 0; font-size: 1.1em;">⚡ Anti-Stop-Prematur</h3>
-    <p style="margin: 0; color: #555; font-size: 0.9em; line-height: 1.6;">Agent menolak label "DONE" tanpa bukti nyata. Escalation chain otomatis ke model lebih kuat. Quality scoring jujur — STUCK = STUCK.</p>
-  </div>
-</td>
-</tr>
-</table>
-
-<br/>
+Dokumentasi lengkap ada di [`docs/README.md`](docs/README.md).
 
 ---
 
-<br/>
+## Instalasi
 
-<!-- ═══════════════════════════════════════════════════════════════
-     TECH STACK — Badge Grid
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">T E C H &nbsp; S T A C K</h2>
-</div>
-
-<br/>
-
-<div align="center">
-
-**Languages**
-<br/>
-<img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
-<img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
-<img src="https://img.shields.io/badge/Tree--sitter-333333?style=flat-square" alt="Tree-sitter" />
-
-<br/>
-
-**AI / LLM**
-<br/>
-<img src="https://img.shields.io/badge/LiteLLM-000000?style=flat-square" alt="LiteLLM" />
-<img src="https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white" alt="OpenAI" />
-<img src="https://img.shields.io/badge/Anthropic-D97757?style=flat-square&logo=anthropic&logoColor=white" alt="Anthropic" />
-<img src="https://img.shields.io/badge/Google_Gemini-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini" />
-
-<br/>
-
-**Infrastructure**
-<br/>
-<img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
-<img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white" alt="GitHub Actions" />
-<img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white" alt="Playwright" />
-
-<br/>
-
-**Tooling**
-<br/>
-<img src="https://img.shields.io/badge/Ruff-D7FF64?style=flat-square&logo=ruff&logoColor=black" alt="Ruff" />
-<img src="https://img.shields.io/badge/Pytest-0A9EDC?style=flat-square&logo=pytest&logoColor=white" alt="Pytest" />
-<img src="https://img.shields.io/badge/Bandit-FFC107?style=flat-square&logo=python&logoColor=black" alt="Bandit" />
-
-</div>
-
-<br/>
-
----
-
-<br/>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     INSTALL
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">I N S T A L L</h2>
-</div>
-
-<br/>
-
-### One-liner (disarankan)
+### One-liner (Linux/macOS)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/FerzDevZ/dhybrid-agent/main/install.sh | bash
 ```
 
-Installer: clone repo ke `~/.dhybrid-agent`, buat venv, pasang dependensi,
-buat symlink `~/.local/bin/dhybrid`, dan siapkan `.env` dari `.env.example`.
-Lalu isi API key dan jalankan `dhybrid repl` (buka terminal baru).
+Installer meng-clone repo ke `~/.dhybrid-agent`, membuat venv, memasang dependensi, lalu membuat symlink `dhybrid` di `~/.local/bin`. Variabel yang bisa disesuaikan:
 
-Variabel opsional:
-- `DHYBRID_INSTALL_DIR` — direktori instalasi (default: `~/.dhybrid-agent`)
-- `DHYBRID_BIN_DIR` — direktori symlink binary (default: `~/.local/bin`)
-- `DHYBRID_BRANCH` — branch git (default: `main`)
-- `DHYBRID_REPO_URL` — repo URL (default: GitHub)
-- `DHYBRID_SKIP_ENV=1` — lewati pembuatan `.env`
-- `DHYBRID_USE_UV=1` — gunakan `uv` untuk install lebih cepat (butuh `uv` terpasang)
+| Variabel | Default | Arti |
+|----------|---------|------|
+| `DHYBRID_INSTALL_DIR` | `~/.dhybrid-agent` | direktori instalasi |
+| `DHYBRID_BIN_DIR` | `~/.local/bin` | tempat symlink binary |
+| `DHYBRID_BRANCH` | `main` | branch git |
+| `DHYBRID_REPO_URL` | `https://github.com/FerzDevZ/dhybrid-agent` | sumber repo |
+| `DHYBRID_SKIP_ENV=1` | — | lewati pembuatan `.env` |
+| `DHYBRID_USE_UV=1` | — | gunakan `uv` untuk instalasi |
 
-### Reinstall / Update via CLI
+### PyPI
 
 ```bash
-dhybrid install                    # reinstall/update via installer
-dhybrid install --use-uv           # pakai uv (lebih cepat)
-dhybrid install --branch main      # branch spesifik
-dhybrid install --install-dir ~/my-dhybrid  # direktori custom
+pip install dhybrid-agent
+# atau
+uv tool install dhybrid-agent
 ```
 
-### Manual
+Wheel berisi config bawaan (`config/default.yaml` diterkapsulkan dan dibaca via `importlib.resources`), jadi instal PyPI berfungsi tanpa meng-clone repo.
+
+### Manual (development)
 
 ```bash
-cd dhybrid-agent
+git clone https://github.com/FerzDevZ/dhybrid-agent && cd dhybrid-agent
 python3 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"          # atau (lebih cepat): uv pip install -e ".[dev]"
-cp .env.example .env             # isi API key yang kamu punya
+pip install -e ".[dev]"
+cp .env.example .env   # isi API key
 ```
 
-### Quality gates (dev)
+### Reinstal / update
 
 ```bash
-pytest -q                        # semua test
-pytest -q -n auto                # lebih cepat (pytest-xdist, paralel)
-pytest -q --cov=src/dhybrid      # laporan coverage
-bandit -q -r src/dhybrid -c .bandit.yml   # static security scan
-pip-audit                        # cek kerentanan dependensi
-pre-commit install               # ruff lint otomatis sebelum tiap commit
+dhybrid install                  # reinstal/update via installer
+dhybrid install --use-uv         # pakai uv
+dhybrid install --branch main    # branch spesifik
 ```
-
-<br/>
 
 ---
 
-<br/>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     QUICKSTART
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">Q U I C K S T A R T</h2>
-</div>
-
-<br/>
+## Quickstart
 
 ```bash
-dhybrid repl                     # sesi interaktif — auto-resume sesi terakhir proyek ini
-dhybrid repl --fresh             # mulai sesi BARU (lewat konteks lama)
+dhybrid repl                     # sesi interaktif; auto-resume sesi terakhir proyek
+dhybrid repl --fresh             # sesi baru, konteks lama dibuang
 dhybrid run "perbaiki bug di calc.py lalu jalankan test"
 dhybrid --cwd /path/proyek repl  # kerja di proyek lain
-dhybrid tokens                   # dashboard token & biaya semua sesi
-dhybrid resume <session_id>      # lanjutkan sesi lama
-dhybrid run --json "cek repo"    # output JSON terstruktur (scripting/CI)
-dhybrid doctor                   # diagnosa config, key, chain, allowlist, skill
-dhybrid install                  # reinstall/update installer
-dhybrid install --use-uv         # reinstall pakai uv (lebih cepat)
+dhybrid run --json "cek repo"    # output JSON (untuk scripting/CI)
+dhybrid tokens                   # token & biaya semua sesi
+dhybrid resume <session_id>      # lanjutkan sesi
+dhybrid doctor                   # diagnosa config, API key, toolchain
 ```
 
-### Baca dokumen kantor
+### Mode Plan ⇄ Build
 
-```
-read_document path/laporan.pdf   # PDF/DOCX/XLSX/PPTX/HTML → markdown
-                                 # (via markitdown; dulu cuma file teks)
-```
-
-### Command REPL
-
-```
-/help  /model [preset]  /tokens  /compact  /clear  /sessions  /skills  /skill <nama|ls|info|rm>  /quit
+```bash
+dhybrid repl --mode plan         # baca-saja
+dhybrid repl --mode build        # eksekusi penuh (default)
 ```
 
-`/skill rm <nama>` hanya menghapus skill workspace (hasil auto-learn); skill
-bawaan ditolak. Auto-skill bisa dimatikan: `skills.auto_learn: false` di config
-atau `DHYBRID_NO_SKILL=1`. Debug: `DHYBRID_DEBUG=1` menyimpan dump konteks &
-hasil tiap run ke `~/.dhybrid/debug/`.
+Di REPL: **Tab** saat buffer kosong menukar plan ⇄ build. Ada juga `/plan`, `/build`, `/mode`.
 
-<br/>
+Model utama diganti kapan saja.
+
+```bash
+dhybrid repl --model anthropic-big
+dhybrid repl --model gemini-fast
+export DHYBRID_MODEL=gpt-4o      # lewat env
+```
+
+### Slash command
+
+```
+/help  /model [preset]  /tokens  /compact  /clear  /sessions
+/settings  /mode  /plan  /build  /skills  /skill <nama|ls|info|rm>  /quit
+```
+
+`/skill rm <nama>` hanya menghapus skill workspace hasil auto-learn; skill bawaan tidak bisa dihapus dari sini. Auto-learn dimatikan via `skills.auto_learn: false` di config atau `DHYBRID_NO_SKILL=1`. Konteks dump untuk debug: `DHYBRID_DEBUG=1` menyimpan hasil tiap run ke `~/.dhybrid/debug/`.
 
 ---
 
-<br/>
+## Fitur
 
-<!-- ═══════════════════════════════════════════════════════════════
-     ARCHITECTURE
-     ═══════════════════════════════════════════════════════════════ -->
+### Routing & model
 
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">A R C H I T E C T U R E</h2>
-</div>
+- Router hybrid dua layer: `fast` untuk langkah mekanis, `big` untuk penalaran.
+- 21 preset provider terkirim (`config/default.yaml`), termasuk route gratis `opencode-zen-*` (9 preset, 6 bebas API key) dan `bynara-*`.
+- Dialog `/settings` untuk memilih model (bisa input manual) dan meng- toggle provider hidup/mati.
 
-<br/>
+### Tool (70+)
 
-<table width="100%" cellpadding="0" cellspacing="0" style="border: none;">
-<tr>
-<td width="20%" valign="top" style="padding: 8px;">
-  <div style="background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 4px 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);">
-    <div style="font-size: 1.8em;">🖥️</div>
-    <div style="font-weight: 700; font-size: 0.85em; margin-top: 6px;">CLI / REPL</div>
-    <div style="font-size: 0.7em; color: #aaa; margin-top: 4px;">ui/</div>
-  </div>
-</td>
-<td width="20%" valign="top" style="padding: 8px;">
-  <div style="background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 4px 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);">
-    <div style="font-size: 1.8em;">🧠</div>
-    <div style="font-weight: 700; font-size: 0.85em; margin-top: 6px;">Agent Loop</div>
-    <div style="font-size: 0.7em; color: #aaa; margin-top: 4px;">agent/ (ReAct)</div>
-  </div>
-</td>
-<td width="20%" valign="top" style="padding: 8px;">
-  <div style="background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 4px 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);">
-    <div style="font-size: 1.8em;">⚡</div>
-    <div style="font-weight: 700; font-size: 0.85em; margin-top: 6px;">Efficiency</div>
-    <div style="font-size: 0.7em; color: #aaa; margin-top: 4px;">efficiency/</div>
-  </div>
-</td>
-<td width="20%" valign="top" style="padding: 8px;">
-  <div style="background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 4px 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);">
-    <div style="font-size: 1.8em;">🔗</div>
-    <div style="font-weight: 700; font-size: 0.85em; margin-top: 6px;">LLM Layer</div>
-    <div style="font-size: 0.7em; color: #aaa; margin-top: 4px;">llm/</div>
-  </div>
-</td>
-<td width="20%" valign="top" style="padding: 8px;">
-  <div style="background: linear-gradient(145deg, #1a1a1a, #2d2d2d); color: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 4px 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);">
-    <div style="font-size: 1.8em;">💾</div>
-    <div style="font-weight: 700; font-size: 0.85em; margin-top: 6px;">Persistence</div>
-    <div style="font-size: 0.7em; color: #aaa; margin-top: 4px;">session/</div>
-  </div>
-</td>
-</tr>
-</table>
+| Kelompok | Tool |
+|----------|------|
+| Terminal | `terminal` (shell, dijaga gate izin), `run_bg`/`poll_bg` (background job + timeout watchdog) |
+| File | `read_file`, `write_file`, `apply_patch` (diff), `grep`, `find_files`, `read_document` (PDF/DOCX/XLSX/PPTX → markdown) |
+| Repo | git status/diff/log, `repo_issues`, `repo_issue`, `repo_pr` (GitHub/GitLab, token env `GITHUB_TOKEN`/`GITLAB_TOKEN`) |
+| Verifikasi | `run_tests` (pytest), `code_sandbox`, `read_image` |
+| Web | `web_search`, `web_fetch`, `http_request` (egress allowlist) |
+| Browser | `browser` (Playwright: navigate/click/type/snapshot) |
+| Runtime lain | `mcp` client (server jsonrpc stdin/stdout), toolchain Go/TS/Rust/Java/C# untuk lint/compile/test |
+| Memori | `memory` (FTS5 + sqlite-vec per proyek), `todo` |
+| Agregator | `code_map`, `code_count`, `read_pdf`, `read_doc` |
+| Power | `power_sys`, `power_data`, `power_scaffold`, `power_pdf`, `power_xlsx` |
 
-<br/>
+### Skills
+
+- ±30 skill bawaan (SKILL.md) + auto-inject sesuai konteks proyek.
+- Auto-learn: skenario yang dijawab berulang diturunkan jadi skill workspace.
+- Plugin/skills: `EXPORTED_SKILLS.md` di root berisi daftar skill yang diekspor.
+
+### Sesi & memori
+
+- Store SQLite lokal (`~/.dhybrid/`), setiap sesi direkam; `resume` dan `--fresh` berpindah antar konteks.
+- **Checkpoint mid-run**: pekerjaan panjang bisa dilanjutkan dari titik terakhir (bukan dari awal).
+- **Branching**: percabangan sesi untuk eksperimen.
+- **Semantic memory**: pencarian memori lama via FTS5 + embedding.
+- Dashboard `/tokens` = token, cache-hit, biaya per sesi.
+
+### Keandalan
+
+| Komponen | Perilaku |
+|----------|----------|
+| Health monitor | cek availability provider tiap sesi, skip model rusak |
+| Auto-verify | hasil tool diverifikasi lagi secara otomatis, loop terbatas |
+| Escalation chain | naikkan ke model besar bila kualitas/error; harus izin user |
+| STUCK ≠ DONE | tolak label selesai tanpa bukti test/hasil verifikasi |
+| Predictor | prediksi penuh-konteks / early-stop |
+
+### Keamanan model
+
+- `sanitize_tool_output` memblokir injeksi instruksi pada output tool.
+- **Egress allowlist** untuk `http_request`.
+- **Audit log JSONL** append-only `~/.dhybrid/audit/`, redaksi secret.
+- **Readonly gate**: Plan Mode membekukan seluruh tool yang bisa mutasi.
+- **Eskalasi wajib izin**: `workflow.escalation: ask|auto|deny` (default `ask`, non-interaktif = deny).
+
+---
+
+## Arsitektur
 
 ```
 src/dhybrid/
-├── llm/         client multi-provider + estimator token
-├── efficiency/  budget, context (compaction), cache, lazy policies
-├── agent/       loop ReAct, hybrid router, hooks, parsing
-├── tools/       terminal, files, patch, search, git, tests, todo, memory, subagent
-├── session/     store SQLite, memori FTS5, konteks sesi
-├── skills/      loader SKILL.md + auto-inject
-├── subagents/   delegasi agent terisolasi
-└── ui/          repl, commands, statusline, render
+├── cli.py           CLI entry (argparse, mode `repl`/`run`)
+├── config.py        loading config + env override
+├── mode.py          definisi PLAN/BUILD + system-prompt block
+├── health.py        health monitor provider
+├── agent/
+│   ├── loop/        agent_loop, step_executor, state_machine, escalation_policy, nudge_controller
+│   ├── router.py    hybrid router + escalasi + cooldown
+│   ├── hooks.py     jalur sebelum/setelah tool, audit
+│   ├── streaming.py ToolBlockFilter (menyembunyikan blok internal)
+│   ├── quality.py   verif penalty & quality scoring
+│   ├── auto_verify.py  verification loop berbatas
+│   └── problem.py   (konteks budget dsb)
+├── llm/             klien multi-provider + estimator token
+├── efficiency/      budget, compaction, cache, predictor, checkpoint, lazy policies
+├── security/        injection guard, egress allowlist, audit logger
+├── tools/           70+ tool + registry + readonly gate
+├── session/         store SQLite, memory FTS/vector, context, branch, semantic
+├── skills/          loader SKILL.md + plugin + auto-learn
+├── subagents/       delegasi agent terisolasi (anti-runaway)
+├── eval/            harness eksekusi evaluasi
+└── ui/              repl, commands, statusbar, render (prompt_toolkit + rich)
 ```
 
-<br/>
+Diagram alur langkah: `ui` → `cli` → `loop` (ReAct) → `router` (pilih model) → `tools` (eksekusi) → guard sanitasi output → audit log → loop. Detail per modul di `docs/architecture.md`.
 
 ---
 
-<br/>
+## Konfigurasi
 
-<!-- ═══════════════════════════════════════════════════════════════
-     CONFIGURATION
-     ═══════════════════════════════════════════════════════════════ -->
+File utama `config/default.yaml` (root adalah symlink; sumber sejati di `src/dhybrid/config/default.yaml` untuk wheel). Menyimpan: model utama, budget, preset provider, allowlist tool, `workflow.escalation`, dsb.
 
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">C O N F I G</h2>
-</div>
+Preset model yang tersedia: `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `bynara-fast/medium/big`, `opencode-zen-*` (9 preset).
 
-<br/>
+Tanpa API key pun bisa jalan: default route `opencode-zen-*` gratis tersedia (6 preset bebas key).
 
-`config/default.yaml` — model utama, budget, preset provider:
+---
+
+## Hemat token
+
+12 teknik terjadi secara internal. Ringkasannya:
+
+1. Agent tidak menulis kode yang tidak diminta (lazy policies).
+2. Konteks lama dipadatkan, bukan dibuang.
+3. Prompt caching (cache_control) memangkas input antar-turn.
+4. Router mengarahkan langkah mekanis ke model murah.
+5. Ukur dampaknya: `/tokens` persesi, dan bandingkan benchmark `docs/token-efficiency.md`.
+
+Benchmark:
 
 ```bash
-dhybrid repl --model anthropic-big     # model utama = Claude Sonnet
-dhybrid repl --model gemini-fast       # model kecil = Gemini Flash
-export DHYBRID_MODEL=gpt-4o            # atau via env
+python -m tests.benchmarks.run_bench        # mode hemat
+python -m tests.benchmarks.run_bench --off   # kontrol tanpa teknik hemat
 ```
 
-Preset tersedia (21): `openai-fast/big`, `anthropic-fast/big`, `openrouter-fast/big`, `gemini-fast/big`, `groq-fast`, `deepseek-fast`, `bynara-fast/medium/big` (route `https://router.bynara.id/v1`), dan `opencode-zen-*` (9 preset route https://opencode.ai/zen/v1 — 6 di antaranya **gratis tanpa API key**: fast/big/codex/nemotron/laguna/ling/mimo/north, model `*-free`).
-
-**Default model = Gemini** (`gemini-flash-latest`, via `/v1beta/openai`). Tanpa key Gemini, dhybrid jalan sebagai chatbot hanya dengan provider yang punya key; pilih model kapan saja via `/settings` (bisa input manual) atau `dhybrid --model <preset>`.
-
-**Provider toggle** — hidup/matikan provider lewat `/settings` (opsi 5). Provider yang dinonaktifkan tidak akan dipakai sebagai model utama maupun di escalation chain.
-
-<br/>
-
 ---
 
-<br/>
+## Dokumentasi
 
-<!-- ═══════════════════════════════════════════════════════════════
-     TOKEN EFFICIENCY
-     ═══════════════════════════════════════════════════════════════ -->
+Index lengkap dan peta dokumen: **[`docs/README.md`](docs/README.md)**
 
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">H E M A T &nbsp; T O K E N</h2>
-</div>
-
-<br/>
-
-<div style="background: linear-gradient(145deg, #f5f5f5, #ffffff); border: 1px solid #e0e0e0; border-radius: 12px; padding: 28px; box-shadow: 4px 4px 16px rgba(0,0,0,0.08), -2px -2px 8px rgba(255,255,255,0.9);">
-
-Lihat `docs/token-efficiency.md` untuk detail 12 teknik + cara mengukur. Inti:
-
-1. Agent **TIDAK** menulis kode yang tidak diminta *(lazy policies)*.
-2. Konteks lama **diringkas** (compaction), bukan dihapus.
-3. **Prompt caching** memangkas biaya input antar turn.
-4. **Router** mengirim kerja mekanis ke model murah.
-5. Semua terukur: `/tokens` menampilkan token, cache-hit, dan biaya per sesi.
-
-</div>
-
-<br/>
-
----
-
-<br/>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     BENCHMARK
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">B E N C H M A R K</h2>
-</div>
-
-<br/>
-
-```bash
-python -m tests.benchmarks.run_bench        # mode hemat ON
-python -m tests.benchmarks.run_bench --off  # pembanding (tanpa teknik hemat)
-```
-
-Bandingkan dua laporan di `docs/benchmark-*.md` untuk melihat % penghematan nyata.
-
-<br/>
-
----
-
-<br/>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     DOCUMENTATION LIBRARY — navigasi per peran
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">D O C U M E N T A S I</h2>
-</div>
-
-<br/>
-
-> 📚 **[Masuk Perpustakaan →](docs/README.md)** — pilih jalur: pemula, pengguna, pengembang.
-
-| 📌 Tujuan | 📄 Baca |
-|-----------|---------|
-| 🌱 **Baru mulai (langkah demi langkah)** | **[`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)** |
-| Instal & update | [Instalasi](#install) |
-| Langsung pakai | [Quickstart](#quickstart) |
-| Semua perintah (CLI + slash) | [`docs/QUICK_REFERENCE.md`](docs/QUICK_REFERENCE.md) |
-| Panduan lengkap end-to-end | [`docs/COMPLETE_GUIDE.md`](docs/COMPLETE_GUIDE.md) |
-| Konfigurasi lanjutan | [`docs/ADVANCED_USAGE.md`](docs/ADVANCED_USAGE.md) |
-| Arsitektur sistem | [`docs/architecture.md`](docs/architecture.md) |
+| Tujuan | Dokumen |
+|-----|------|
+| Instal langkah demi langkah | [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) |
+| Semua perintah CLI & slash | [`docs/QUICK_REFERENCE.md`](docs/QUICK_REFERENCE.md) |
+| Panduan end-to-end | [`docs/COMPLETE_GUIDE.md`](docs/COMPLETE_GUIDE.md) |
+| Konfigurasi lanjutan, sesi, memori | [`docs/ADVANCED_USAGE.md`](docs/ADVANCED_USAGE.md) |
+| Arsitektur & aliran data | [`docs/architecture.md`](docs/architecture.md) |
 | 12 teknik hemat token | [`docs/token-efficiency.md`](docs/token-efficiency.md) |
-| Dev mendalam per modul | [`docs/TECHNICAL_DOCS.md`](docs/TECHNICAL_DOCS.md) |
-| Multi-bahasa kode | [`docs/MULTI_LANGUAGE_GUIDE.md`](docs/MULTI_LANGUAGE_GUIDE.md) |
-| Hasil audit bug & perbaikan | [`docs/BUGS_AUDIT.md`](docs/BUGS_AUDIT.md) |
-| Roadmap & perencanaan | [`docs/roadmap.md`](docs/roadmap.md) |
+| Detail teknis per modul | [`docs/TECHNICAL_DOCS.md`](docs/TECHNICAL_DOCS.md) |
+| Multi-bahasa (toolchain) | [`docs/MULTI_LANGUAGE_GUIDE.md`](docs/MULTI_LANGUAGE_GUIDE.md) |
+| Audit bug & perbaikan | [`docs/BUGS_AUDIT.md`](docs/BUGS_AUDIT.md) |
+| Roadmap | [`docs/roadmap.md`](docs/roadmap.md) |
 | Riwayat rilis | [`CHANGELOG.md`](CHANGELOG.md) |
 
-<br/>
+---
+
+## Pengembangan
+
+Quality gates:
+
+```bash
+pytest -q                        # semua test
+pytest -q -n auto                # paralel
+pytest -q --cov=src/dhybrid      # coverage
+bandit -q -r src/dhybrid -c .bandit.yml
+pip-audit                        # audit dependensi
+pre-commit install               # ruff otomatis sebelum commit
+ruff check src tests
+```
+
+Release: tag `v*` memicu `.github/workflows/release.yml` → build wheel+sdist → trusted-publish ke PyPI → GitHub Release.
+
+Deploy container: `Dockerfile` + `docker-compose.yml` (sandbox untuk pengecekan/preview).
 
 ---
 
-<br/>
+## Lisensi
 
-<!-- ═══════════════════════════════════════════════════════════════
-     GITHUB STATS
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-<h2 style="font-weight: 800; letter-spacing: 3px; color: #000;">S T A T S</h2>
-</div>
-
-<br/>
-
-<div align="center">
-  <a href="https://github.com/FerzDevZ">
-    <img src="https://github-readme-stats.vercel.app/api?username=FerzDevZ&show_icons=true&hide_border=true&bg_color=transparent&title_color=000000&text_color=333333&icon_color=000000&disable_animations=true" alt="FerzDevZ Stats" height="150" />
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/FerzDevZ">
-    <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=FerzDevZ&layout=compact&hide_border=true&bg_color=transparent&title_color=000000&text_color=333333&disable_animations=true" alt="Top Languages" height="150" />
-  </a>
-</div>
-
-<br/>
-
----
-
-<br/>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     FOOTER — Quote, Social Links, Separator
-     ═══════════════════════════════════════════════════════════════ -->
-
-<div align="center">
-
-<p style="font-style: italic; color: #666; font-size: 1em;">
-  "Perfection is achieved, not when there is nothing more to add,<br>
-  but when there is nothing left to take away."
-</p>
-<p style="color: #999; font-size: 0.9em;">— Antoine de Saint-Exupery</p>
-
-<br/>
-
-<!-- Social Links -->
-<a href="https://github.com/FerzDevZ/dhybrid-agent">
-  <img src="https://img.shields.io/badge/GitHub-000000?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" />
-</a>
-<a href="https://linkedin.com/in/ferzdevz">
-  <img src="https://img.shields.io/badge/LinkedIn-000000?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn" />
-</a>
-<a href="mailto:ferzdevz@gmail.com">
-  <img src="https://img.shields.io/badge/Email-000000?style=for-the-badge&logo=minutemailer&logoColor=white" alt="Email" />
-</a>
-<a href="https://linktr.ee/ferzpedia">
-  <img src="https://img.shields.io/badge/FERZPEDIA-000000?style=for-the-badge&logo=linktree&logoColor=white" alt="FERZPEDIA" />
-</a>
-
-<br/>
-<br/>
-
-<!-- 3D Capsule Separator -->
-<div style="background: linear-gradient(90deg, transparent, #000, transparent); height: 2px; width: 40%; margin: 0 auto; border-radius: 1px; box-shadow: 0 1px 6px rgba(0,0,0,0.3);"></div>
-
-<br/>
-
-<p style="color: #999; font-size: 0.85em;">
-  Built with love by <strong>FerzDevZ</strong> &middot; MIT License &middot; Data 100% Local
-</p>
-
-</div>
+MIT — lihat `LICENSE`. Produk data 100% lokal. Repo: [github.com/FerzDevZ/dhybrid-agent](https://github.com/FerzDevZ/dhybrid-agent).

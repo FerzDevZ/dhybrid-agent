@@ -36,7 +36,7 @@ versi mengikuti [Semantic Versioning](https://semver.org/).
 
 ## [0.9.6] - 2026-08-04
 
-### Reliability Power-up: Retry + Redis Persistence + MIME Media
+### Reliability: retry + Redis persistence + MIME media
 Tingkatkan reliability & observability: retry cerdas, state persistence cross-session via Redis, serta MIME detection audio/video.
 
 - **Tenacity retry** (`llm/providers.py`) — exponential backoff pada provider HTTP (Anthropic/OpenAICompat), increment `api_errors` counter saat retry failure.
@@ -58,8 +58,8 @@ Tingkatkan reliability & observability: retry cerdas, state persistence cross-se
 
 ## [0.9.5] - 2026-08-04
 
-### Power-up: observability, state persistence + unified LLM routing
-Elevasi dhybrid-agent dari CLI hemat token ke agen AI modular tingkat lanjut.
+### Observability, state persistence + unified LLM routing
+Mengubah dhybrid-agent dari CLI hemat token menjadi agen AI modular.
 - **Metrics module** (`efficiency/metrics.py`) — Counter + Histogram + Registry
   in-memory (8 counter standar: tokens_*, api_calls/errors, turn_latency_ms, cost).
 - **Token counting akurat** (`efficiency/tokenizer.py`) — tiktoken per-model +
@@ -89,7 +89,7 @@ Elevasi dhybrid-agent dari CLI hemat token ke agen AI modular tingkat lanjut.
 
 ## [0.9.0] - 2026-08-03
 
-### Power-up pip packages (extra `power`) — 5 tool baru + MIME detect
+### Paket `power` opsional — 5 tool baru + MIME detect
 
 Tool baru berbasis package populer, semuanya **soft-register**: kalau
 package belum terpasang, tool tidak merusak startup & dipanggil → pesan

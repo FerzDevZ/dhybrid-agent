@@ -1,10 +1,8 @@
-# dhybrid-agent — Complete Technical Documentation
+# Teknikal Dokumentasi — dhybrid-agent
 
-> **Version:** 0.9.6+ | **Last Updated:** 2025-08-05 | **Status:** Production Ready
+Versi: 0.9.6+ · Python ≥3.12 · MIT
 
----
-
-## Table of Contents
+## Daftar Isi
 
 1. [Architecture Overview](#architecture-overview)
 2. [Core Modules](#core-modules)
@@ -26,47 +24,41 @@
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        dhybrid-agent                             │
-├─────────────────────────────────────────────────────────────────┤
-│  CLI / REPL Interface                                           │
-│  ├── Interactive mode (prompt_toolkit + rich)                   │
-│  ├── Non-interactive mode (scripting/CI)                        │
-│  └── Commands: repl, run, tokens, resume, sessions, skills,     │
-│      doctor, self-update, install                                │
-├─────────────────────────────────────────────────────────────────┤
-│  SessionContext (Central Hub)                                    │
-│  ├── Config (model, budget, tools, skills, presets)             │
-│  ├── SessionStore (SQLite: sessions, messages, summaries)       │
-│  ├── TokenBudget (soft/hard limits, compaction)                 │
-│  ├── ContextManager (compaction, caching, keep_recent)          │
-│  ├── ModelRegistry (multi-provider, cost tracking)              │
-│  ├── HybridRouter (small/big model escalation)                  │
-│  ├── MemoryStore (KV + FTS5 full-text search)                   │
-│  ├── EpisodicMemory (SQLite + vector embeddings)                │
-│  ├── ToolRegistry (70+ tools, allowlist, validation)            │
-│  └── Skills Loader (auto-inject, marketplace, composition)      │
-├─────────────────────────────────────────────────────────────────┤
-│  Agent Loop (ReAct Pattern)                                     │
-│  ├── Step: Model call → Tool execution → Verification           │
-│  ├── Hybrid Routing (small → big model escalation)              │
-│  ├── Quality Scoring (files, tests, mutating tools)             │
-│  ├── Early Stop Detection (STUCK vs DONE)                       │
-│  ├── Auto-skill Learning (from successful sessions)             │
-│  ├── Clarify/Ask User Integration                               │
-│  └── Reasoning Traces (Chain-of-Thought logging)                │
-├─────────────────────────────────────────────────────────────────┤
-│  Tools (70+)                                                    │
-│  ├── Core: terminal, files, git, search, web                    │
-│  ├── Code: code_map, dep_graph, semantic_search                 │
-│  ├── Language Toolchains: Go, Rust, TypeScript, Java, C#        │
-│  ├── Codegen: OpenAPI, GraphQL, Protobuf                        │
-│  ├── CI/CD: GitHub Actions, GitLab CI                           │
-│  ├── Database: Migrations (Alembic-compatible)                  │
-│  ├── Memory: episodic_remember/recall/search                    │
-│  ├── Orchestrator: Multi-agent planner/executor/reviewer        │
-│  └── Config: Prometheus, OpenTelemetry, CI/CD                   │
-└─────────────────────────────────────────────────────────────────┘
+dhybrid-agent
+├── CLI / REPL
+│   ├── interaktif (prompt_toolkit + rich)
+│   ├── non-interaktif (scripting/CI)
+│   └── perintah: repl, run, tokens, resume, sessions, skills,
+│       doctor, self-update, install
+├── SessionContext (hub)
+│   ├── Config (model, budget, tools, skills, presets)
+│   ├── SessionStore (SQLite: sessions, messages, summaries)
+│   ├── TokenBudget (soft/hard, compaction)
+│   ├── ContextManager (compaction, caching, keep_recent)
+│   ├── ModelRegistry (multi-provider, cost tracking)
+│   ├── HybridRouter (small/big escalation)
+│   ├── MemoryStore (KV + FTS5)
+│   ├── EpisodicMemory (SQLite + vector embeddings)
+│   ├── ToolRegistry (70+ tools, allowlist, validation)
+│   └── SkillsLoader (auto-inject, marketplace, composition)
+├── Agent Loop (ReAct)
+│   ├── langkah: model call → tool → verification
+│   ├── hybrid routing (small → big)
+│   ├── quality scoring (files, tests, mutating tools)
+│   ├── early-stop (STUCK vs DONE)
+│   ├── auto-skill learning
+│   ├── clarify/ask-user integration
+│   └── reasoning trace (CoT logging)
+├── Tools (70+)
+│   ├── inti: terminal, files, git, search, web
+│   ├── code: code_map, dep_graph, semantic_search
+│   ├── toolchain: Go, Rust, TypeScript, Java, C#
+│   ├── codegen: OpenAPI, GraphQL, Protobuf
+│   ├── CI/CD: GitHub Actions, GitLab CI
+│   ├── database: migrasi (Alembic-compatible)
+│   ├── memory: episodic_remember/recall/search
+│   ├── orchestrator: multi-agent planner/executor/reviewer
+│   └── observability: Prometheus, OpenTelemetry
 ```
 
 ### Key Design Principles
@@ -75,7 +67,7 @@
 |-----------|----------------|
 | **Token Efficiency** | 12 techniques: lazy policies, compaction, prompt caching, diff-based edits, semantic cache, early-stop, hybrid routing |
 | **Local-First** | All data in `~/.dhybrid/` (SQLite, cache, skills, memory) — no telemetry |
-| **Hybrid Routing** | Cheap model for mechanics → Quality escalation to powerful model |
+| **Hybrid Routing** | Cheap model for mechanics → quality escalation to larger model |
 | **Skill-Driven** | Auto-inject relevant skills via keyword/semantic matching |
 | **Persistent Memory** | Episodic (cross-session) + Project KV + Semantic vector search |
 | **Multi-Language** | Native toolchains for 6 languages with CI/CD generation |
@@ -165,7 +157,7 @@ class ContextManager:
 
 ## Agent Loop
 
-### Main Loop (`src/dhybrid/agent/loop.py`)
+### Main Loop (`src/dhybrid/agent/loop/agent_loop.py`)
 
 ```python
 class AgentLoop:

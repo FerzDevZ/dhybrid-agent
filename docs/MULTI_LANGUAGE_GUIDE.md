@@ -2,7 +2,7 @@
 
 ## Overview
 
-dhybrid-agent provides first-class support for multiple programming languages through dedicated toolchains. Each language has native tools for testing, linting, formatting, building, and security analysis.
+dhybrid-agent supports multiple programming languages through dedicated toolchains. Each language has native tools for testing, linting, formatting, building, and security analysis.
 
 ## Supported Languages
 
@@ -57,7 +57,7 @@ go_build
 ### Configuration
 
 ```yaml
-# config/default.yaml additions for Go
+# config/default.yaml — Go
 tool:
   allowlist: [..., go_test, go_vet, go_fmt, go_build, go_mod_tidy, golangci_lint, gosec]
 ```
@@ -65,6 +65,7 @@ tool:
 ### Common Patterns
 
 **Project Structure:**
+
 ```
 myproject/
 ├── go.mod
@@ -83,6 +84,7 @@ myproject/
 **Test File Naming:** `*_test.go`
 
 **Run Specific Test:**
+
 ```bash
 go_test --args "-run TestUserLogin"
 ```
@@ -140,6 +142,7 @@ tool:
 ### Common Patterns
 
 **Project Structure:**
+
 ```
 myproject/
 ├── Cargo.toml
@@ -156,10 +159,12 @@ myproject/
 ```
 
 **Test Organization:**
-- Unit tests: `#[cfg(test)] mod tests { ... }` in same file
+
+- Unit tests: `#[cfg(test)] mod tests { ... }` di file yang sama
 - Integration tests: `tests/*.rs`
 
 **Run Specific Test:**
+
 ```bash
 cargo_test -- test_user_login
 ```
@@ -187,7 +192,7 @@ prettier_fmt     # Format (prettier --write .)
 ```bash
 # 1. Initialize project
 npm init -y
-# Agent sets up package.json with scripts
+# Agent sets up package.json dengan scripts
 
 # 2. Install dependencies
 npm_install
@@ -198,18 +203,18 @@ tsc_check
 # 4. Lint
 eslint_check
 
-# 4. Run tests
+# 5. Run tests
 npm_test          # Uses package.json "test" script
 jest_test         # Direct jest
 vitest_test       # Direct vitest
 
-# 5. Format
+# 6. Format
 prettier_fmt
 
-# 6. Build
+# 7. Build
 npm_build
 
-# 7. Security audit
+# 8. Security audit
 npm_audit
 ```
 
@@ -223,6 +228,7 @@ tool:
 ### Common Patterns
 
 **Project Structure (TypeScript):**
+
 ```
 myproject/
 ├── package.json
@@ -242,6 +248,7 @@ myproject/
 ```
 
 **package.json Scripts:**
+
 ```json
 {
   "scripts": {
@@ -329,6 +336,7 @@ tool:
 ### Common Patterns
 
 **Maven Structure:**
+
 ```
 myproject/
 ├── pom.xml
@@ -343,6 +351,7 @@ myproject/
 ```
 
 **Gradle Structure:**
+
 ```
 myproject/
 ├── build.gradle.kts
@@ -415,6 +424,7 @@ tool:
 ### Common Patterns
 
 **Project Structure:**
+
 ```
 MySolution/
 ├── MySolution.sln
@@ -446,7 +456,7 @@ my-monorepo/
 ├── java-service/
 └── dotnet-service/
 
-# Agent can work across all languages
+# Agent dapat bekerja lintas bahasa
 dhybrid repl
 > "add health check endpoint to all services"
 # Agent detects each language and uses appropriate tools
@@ -454,9 +464,10 @@ dhybrid repl
 
 ### Language Detection
 
-The agent automatically detects language by:
+Agent mendeteksi bahasa secara otomatis berdasarkan:
+
 1. Project files (`go.mod`, `Cargo.toml`, `package.json`, `pom.xml`, `*.csproj`)
-2. File extensions in the workspace
+2. File extensions di workspace
 3. Existing tool configurations
 
 ### Shared Patterns Across Languages
@@ -477,6 +488,7 @@ The agent automatically detects language by:
 ### GitHub Actions Examples
 
 **Go:**
+
 ```yaml
 - name: Test
   run: go test ./...
@@ -485,6 +497,7 @@ The agent automatically detects language by:
 ```
 
 **Rust:**
+
 ```yaml
 - name: Check
   run: cargo check
@@ -495,6 +508,7 @@ The agent automatically detects language by:
 ```
 
 **TypeScript:**
+
 ```yaml
 - name: Install
   run: npm ci
@@ -507,6 +521,7 @@ The agent automatically detects language by:
 ```
 
 **Java (Maven):**
+
 ```yaml
 - name: Test
   run: mvn test
@@ -515,6 +530,7 @@ The agent automatically detects language by:
 ```
 
 **C#:**
+
 ```yaml
 - name: Restore
   run: dotnet restore
@@ -529,48 +545,53 @@ The agent automatically detects language by:
 ## Troubleshooting by Language
 
 ### Go
+
 | Issue | Solution |
 |-------|----------|
-| "go: command not found" | Install Go from golang.org |
+| "go: command not found" | Install Go dari golang.org |
 | "golangci-lint not found" | `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest` |
 | Module not found | Run `go mod tidy` |
 
 ### Rust
+
 | Issue | Solution |
 |-------|----------|
-| "cargo: command not found" | Install from rustup.rs |
+| "cargo: command not found" | Install dari rustup.rs |
 | "clippy not found" | `rustup component add clippy` |
 | "cargo-audit not found" | `cargo install cargo-audit` |
 
 ### TypeScript
+
 | Issue | Solution |
 |-------|----------|
-| "npm: command not found" | Install Node.js from nodejs.org |
+| "npm: command not found" | Install Node.js dari nodejs.org |
 | "tsc: command not found" | `npm install -g typescript` |
 | "eslint: command not found" | `npm install -g eslint` |
 
 ### Java
+
 | Issue | Solution |
 |-------|----------|
-| "mvn: command not found" | Install Maven from maven.apache.org |
-| "gradle: command not found" | Install from gradle.org |
-| "spotbugs not found" | Add to build.gradle.kts plugins |
+| "mvn: command not found" | Install Maven dari maven.apache.org |
+| "gradle: command not found" | Install dari gradle.org |
+| "spotbugs not found" | Add ke build.gradle.kts plugins |
 
 ### C#
+
 | Issue | Solution |
 |-------|----------|
-| "dotnet: command not found" | Install .NET SDK from dotnet.microsoft.com |
+| "dotnet: command not found" | Install .NET SDK dari dotnet.microsoft.com |
 | "dotnet-ef not found" | `dotnet tool install --global dotnet-ef` |
 
 ---
 
 ## Best Practices
 
-1. **Use language-specific tools** — Don't use shell commands when native tools exist
-2. **Run checks in order** — Format → Lint → Type-check → Test → Build
-3. **Pin tool versions** — Use lockfiles (`go.sum`, `Cargo.lock`, `package-lock.json`)
-4. **Configure in repo** — Keep `golangci.yml`, `.eslintrc`, `checkstyle.xml` in version control
-5. **Automate in CI** — Run all checks on every PR
+1. **Gunakan tool per bahasa** — Jangan pakai shell command kalau ada native tools
+2. **Jalankan check berurutan** — Format → Lint → Type-check → Test → Build
+3. **Pin versi tool** — Pakai lockfiles (`go.sum`, `Cargo.lock`, `package-lock.json`)
+4. **Config di repo** — Simpan `golangci.yml`, `.eslintrc`, `checkstyle.xml` di version control
+5. **Otomasi di CI** — Jalankan semua check di setiap PR
 
 ---
 
